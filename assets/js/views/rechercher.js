@@ -12,6 +12,14 @@ function createEmptyCover() {
     const placeholder = document.createElement('div');
     placeholder.className = 'album-card__cover album-card__cover--empty';
     placeholder.setAttribute('aria-hidden', 'true');
+
+    const logo = document.createElement('img');
+    logo.className = 'album-card__cover-logo';
+    logo.src = 'assets/images/assets/itrack.ico';
+    logo.alt = '';
+    logo.draggable = false;
+    placeholder.appendChild(logo);
+
     return placeholder;
 }
 

@@ -62,7 +62,7 @@ Toggle favorite.
 
 ### `GET api.php?mb_search=1&q=...`
 
-Search album/EP release-groups on MusicBrainz.
+Search album/EP release-groups on MusicBrainz (title/artist fields, score ≥ 80, excludes compilations/live/remixes/Various Artists).
 
 ```json
 {

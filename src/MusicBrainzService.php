@@ -7,7 +7,23 @@ final class MusicBrainzService
     private const BASE_URL = 'https://musicbrainz.org/ws/2/';
     private const COVER_ART_FRONT = 'https://coverartarchive.org/release-group/%s/front-250';
     private const USER_AGENT = 'iTrack/0.1 (personal music library; local)';
-    private const DEFAULT_LIMIT = 25;
+    private const DEFAULT_LIMIT = 10;
+    private const FETCH_LIMIT = 30;
+    private const MIN_SCORE = 80;
+
+    /** @var list<string> */
+    private const BLOCKED_SECONDARY_TYPES = [
+        'Compilation',
+        'Live',
+        'Remix',
+        'Soundtrack',
+        'DJ-mix',
+        'Interview',
+        'Demo',
+        'Mixtape/Street',
+        'Spokenword',
+        'Audiobook',
+    ];
 
     /**
      * Search album/EP release-groups by free text.
@@ -23,16 +39,10 @@ final class MusicBrainzService
 
         $limit = max(1, min(100, $limit));
 
-        // Keep the Lucene query simple: user text + album/EP primary type.
-        $lucene = sprintf(
-            '(%s) AND (primarytype:album OR primarytype:ep)',
-            $this->escapeLucene($query)
-        );
-
         $url = self::BASE_URL . 'release-group?' . http_build_query([
-            'query' => $lucene,
+            'query' => $this->buildLuceneQuery($query),
             'fmt' => 'json',
-            'limit' => $limit,
+            'limit' => self::FETCH_LIMIT,
         ]);
 
         $fetch = $this->fetchJson($url);
@@ -51,18 +61,48 @@ final class MusicBrainzService
                 continue;
             }
 
-            $mapped = $this->mapReleaseGroup($row);
+            $mapped = $this->mapReleaseGroup($row, $query);
             if ($mapped !== null) {
                 $items[] = $mapped;
+            }
+
+            if (count($items) >= $limit) {
+                break;
             }
         }
 
         return MusicBrainzFetchResult::ok($items);
     }
 
+    private function buildLuceneQuery(string $query): string
+    {
+        $phrase = $this->quotePhrase($query);
+        $escaped = $this->escapeLucene($query);
+
+        $parts = [
+            sprintf('(releasegroup:%s^4 OR artist:%s^3 OR releasegroup:(%s) OR artist:(%s))', $phrase, $phrase, $escaped, $escaped),
+            '(primarytype:album OR primarytype:ep)',
+            'NOT secondarytype:compilation',
+            'NOT secondarytype:live',
+            'NOT secondarytype:remix',
+            'NOT secondarytype:soundtrack',
+            'NOT secondarytype:dj-mix',
+            'NOT secondarytype:interview',
+            'NOT secondarytype:demo',
+            'NOT artist:"Various Artists"',
+        ];
+
+        return implode(' AND ', $parts);
+    }
+
+    private function quotePhrase(string $value): string
+    {
+        $clean = str_replace('"', '', $value);
+        return '"' . $this->escapeLucene($clean) . '"';
+    }
+
     private function escapeLucene(string $value): string
     {
-        // Escape Lucene special characters so free-text search stays safe.
         return preg_replace('/([+\-&|!(){}\[\]^"~*?:\\\\\/])/', '\\\\$1', $value) ?? $value;
     }
 
@@ -77,8 +117,13 @@ final class MusicBrainzService
      *   cover_url: string
      * }|null
      */
-    private function mapReleaseGroup(array $row): ?array
+    private function mapReleaseGroup(array $row, string $query): ?array
     {
+        $score = isset($row['score']) ? (int) $row['score'] : 0;
+        if ($score < self::MIN_SCORE) {
+            return null;
+        }
+
         $mbid = isset($row['id']) && is_string($row['id']) ? trim($row['id']) : '';
         $title = isset($row['title']) && is_string($row['title']) ? trim($row['title']) : '';
         $primaryType = isset($row['primary-type']) && is_string($row['primary-type'])
@@ -93,6 +138,24 @@ final class MusicBrainzService
             return null;
         }
 
+        $secondaryTypes = $row['secondary-types'] ?? [];
+        if (is_array($secondaryTypes)) {
+            foreach ($secondaryTypes as $secondaryType) {
+                if (is_string($secondaryType) && in_array($secondaryType, self::BLOCKED_SECONDARY_TYPES, true)) {
+                    return null;
+                }
+            }
+        }
+
+        $artist = $this->extractArtistCredit($row);
+        if ($this->isVariousArtist($artist)) {
+            return null;
+        }
+
+        if (!$this->matchesQuery($title, $artist, $query)) {
+            return null;
+        }
+
         $date = isset($row['first-release-date']) && is_string($row['first-release-date'])
             ? trim($row['first-release-date'])
             : null;
@@ -100,11 +163,72 @@ final class MusicBrainzService
         return [
             'mbid' => $mbid,
             'title' => $title,
-            'artist' => $this->extractArtistCredit($row),
+            'artist' => $artist,
             'primary_type' => $primaryType,
             'first_release_date' => $date !== '' ? $date : null,
             'cover_url' => sprintf(self::COVER_ART_FRONT, rawurlencode($mbid)),
         ];
+    }
+
+    private function matchesQuery(string $title, string $artist, string $query): bool
+    {
+        $needle = $this->normalize($query);
+        if ($needle === '') {
+            return false;
+        }
+
+        $normalizedTitle = $this->normalize($title);
+        $normalizedArtist = $this->normalize($artist);
+
+        if (
+            $normalizedTitle === $needle
+            || $normalizedArtist === $needle
+            || str_starts_with($normalizedTitle, $needle)
+            || str_starts_with($normalizedArtist, $needle)
+            || str_contains($normalizedTitle, $needle)
+            || str_contains($normalizedArtist, $needle)
+        ) {
+            return true;
+        }
+
+        $tokens = preg_split('/\s+/', $needle) ?: [];
+        $tokens = array_values(array_filter($tokens, static fn(string $token): bool => $token !== ''));
+        if ($tokens === []) {
+            return false;
+        }
+
+        $haystack = $normalizedTitle . ' ' . $normalizedArtist;
+        foreach ($tokens as $token) {
+            if (!str_contains($haystack, $token)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function normalize(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+        if (class_exists('Normalizer')) {
+            $normalized = \Normalizer::normalize($value, \Normalizer::FORM_D);
+            if (is_string($normalized)) {
+                $value = preg_replace('/\p{Mn}/u', '', $normalized) ?? $value;
+            }
+        }
+
+        return $value;
+    }
+
+    private function isVariousArtist(string $artist): bool
+    {
+        $normalized = $this->normalize($artist);
+        return $normalized === 'various artists'
+            || $normalized === 'various'
+            || $normalized === 'v.a.'
+            || $normalized === 'va';
     }
 
     /**
