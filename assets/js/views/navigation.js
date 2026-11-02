@@ -3,7 +3,6 @@ let currentView = 'view-accueil';
 const VIEW_TO_HASH = {
     'view-rechercher': 'rechercher',
     'view-accueil': 'accueil',
-    'view-nouveautes': 'nouveautes',
     'view-albums': 'albums',
     'view-collection': 'collection',
 };
@@ -11,7 +10,6 @@ const VIEW_TO_HASH = {
 const HASH_TO_VIEW = {
     rechercher: 'view-rechercher',
     accueil: 'view-accueil',
-    nouveautes: 'view-nouveautes',
     albums: 'view-albums',
     collection: 'view-collection',
 };

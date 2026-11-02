@@ -19,6 +19,27 @@ export async function fetchAlbums() {
     return response.json();
 }
 
+export async function searchMusicBrainzAlbums(query, { signal } = {}) {
+    const params = new URLSearchParams({
+        mb_search: '1',
+        q: query,
+    });
+    const response = await fetch(`${API_URL}?${params.toString()}`, { signal });
+    if (!response.ok) {
+        let message = 'Impossible de chercher sur MusicBrainz';
+        try {
+            const body = await response.json();
+            if (body && typeof body.error === 'string' && body.error) {
+                message = body.error;
+            }
+        } catch {
+            // keep default message
+        }
+        throw new Error(message);
+    }
+    return response.json();
+}
+
 export async function createAlbum(data) {
     const response = await fetch(API_URL, {
         method: 'POST',

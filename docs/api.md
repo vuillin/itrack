@@ -57,3 +57,25 @@ Toggle favorite.
   "id": 1
 }
 ```
+
+## MusicBrainz search
+
+### `GET api.php?mb_search=1&q=...`
+
+Search album/EP release-groups on MusicBrainz.
+
+```json
+{
+  "query": "radiohead",
+  "items": [
+    {
+      "mbid": "b1392450-e666-3926-a536-22c65f834433",
+      "title": "OK Computer",
+      "artist": "Radiohead",
+      "primary_type": "Album",
+      "first_release_date": "1997-05-21",
+      "cover_url": "https://coverartarchive.org/release-group/b1392450-e666-3926-a536-22c65f834433/front-250"
+    }
+  ]
+}
+```

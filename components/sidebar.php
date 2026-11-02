@@ -23,12 +23,6 @@ require_once dirname(__DIR__) . '/src/Icon.php';
                     <span class="nav-btn__label">Accueil</span>
                 </a>
             </li>
-            <li>
-                <a href="#" class="nav-btn" data-target="view-nouveautes">
-                    <span class="nav-btn__icon"><?= Icon::render('explore') ?></span>
-                    <span class="nav-btn__label">Nouveautés</span>
-                </a>
-            </li>
         </ul>
     </nav>
 

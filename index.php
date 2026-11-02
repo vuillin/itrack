@@ -30,7 +30,6 @@ $apiToken = getenv('ITRACK_API_TOKEN') ?: '';
         <main class="main-content">
             <?php include 'views/rechercher.php'; ?>
             <?php include 'views/accueil.php'; ?>
-            <?php include 'views/nouveautes.php'; ?>
             <?php include 'views/albums.php'; ?>
             <?php include 'views/collection.php'; ?>
         </main>
