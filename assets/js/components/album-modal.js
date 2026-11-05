@@ -1,13 +1,23 @@
-import { fetchMusicBrainzReleaseGroup } from '../api/client.js';
-import { coverUrl } from '../utils/dom.js';
+import { fetchMusicBrainzReleaseGroup, markAlbumListened, unlistenAlbum } from '../api/client.js';
+import { removeAlbum, upsertAlbum } from '../state.js';
+import { albumCoverUrl } from '../utils/dom.js';
+import { toastError, toastSuccess } from './toast.js';
 
 let overlay = null;
 let dialog = null;
 let bodyEl = null;
 let titleEl = null;
+let actionsEl = null;
+let listenBtn = null;
 let abortController = null;
 let requestId = 0;
 let lastFocus = null;
+let currentAlbum = null;
+let detailReady = false;
+let listenBusy = false;
+let manageListens = false;
+let unlistenStep = 0;
+let unlistenBusy = false;
 
 function yearFromDate(value) {
     if (typeof value !== 'string' || value === '') return '';
@@ -39,6 +49,7 @@ function normalizeSeed(seed = {}, { remote = false } = {}) {
         : [];
 
     return {
+        id: seed.id != null ? Number(seed.id) : null,
         mbid: typeof seed.mbid === 'string' ? seed.mbid : '',
         title: seed.title || 'Sans titre',
         artist: seed.artist || 'Artiste inconnu',
@@ -50,11 +61,120 @@ function normalizeSeed(seed = {}, { remote = false } = {}) {
         genres,
         rating: seed.rating && typeof seed.rating === 'object' ? seed.rating : null,
         description: seed.description || seed.annotation || seed.overview || null,
-        cover_url: remote
-            ? (seed.cover_url || '')
-            : (seed.cover_url || coverUrl(seed.cover)),
+        cover_url: albumCoverUrl(seed),
         tracks,
+        last_listened_at: seed.last_listened_at || null,
     };
+}
+
+function todayDate() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function syncListenButton() {
+    if (!listenBtn) return;
+    const canListen = Boolean(currentAlbum?.title) && detailReady && !listenBusy;
+    listenBtn.disabled = !canListen;
+    listenBtn.classList.toggle('is-busy', listenBusy);
+}
+
+function buildListenPayload(album) {
+    const year = yearFromDate(album.first_release_date) || album.release_year || null;
+    return {
+        title: album.title,
+        artist: album.artist,
+        mbid: album.mbid || null,
+        release_year: year ? Number(year) : null,
+        first_release_date: album.first_release_date,
+        primary_type: album.primary_type || null,
+        secondary_types: album.secondary_types || [],
+        disambiguation: album.disambiguation || null,
+        genres: album.genres || [],
+        description: album.description || null,
+        overview: album.description || null,
+        tracks: album.tracks || [],
+        rating: album.rating || null,
+        last_listened_at: todayDate(),
+    };
+}
+
+async function handleListenClick() {
+    if (!currentAlbum || !detailReady || listenBusy) return;
+
+    listenBusy = true;
+    syncListenButton();
+
+    try {
+        const result = await markAlbumListened(buildListenPayload(currentAlbum));
+        if (result?.album) {
+            upsertAlbum(result.album);
+            document.dispatchEvent(new CustomEvent('itrack:albums-changed'));
+        }
+        toastSuccess('Ajouté à tes écoutes');
+        closeAlbumModal();
+    } catch (error) {
+        toastError(error instanceof Error ? error.message : 'Impossible d’enregistrer l’écoute');
+    } finally {
+        listenBusy = false;
+        syncListenButton();
+    }
+}
+
+function renderUnlistenButton() {
+    if (!manageListens || !currentAlbum?.id) return null;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'album-modal__unlisten';
+    btn.disabled = unlistenBusy;
+
+    if (unlistenStep === 0) {
+        btn.textContent = 'Retirer des écoutes';
+    } else {
+        btn.classList.add('album-modal__unlisten--confirm');
+        btn.textContent = 'Confirmer le retrait';
+    }
+
+    btn.addEventListener('click', () => {
+        handleUnlistenClick();
+    });
+
+    return btn;
+}
+
+async function handleUnlistenClick() {
+    if (!manageListens || !currentAlbum?.id || unlistenBusy) return;
+
+    if (unlistenStep === 0) {
+        unlistenStep = 1;
+        renderAlbum(currentAlbum);
+        return;
+    }
+
+    unlistenBusy = true;
+    renderAlbum(currentAlbum);
+
+    try {
+        const result = await unlistenAlbum(currentAlbum.id);
+        if (result?.deleted) {
+            removeAlbum(currentAlbum.id);
+        } else if (result?.album) {
+            upsertAlbum(result.album);
+        } else {
+            removeAlbum(currentAlbum.id);
+        }
+        document.dispatchEvent(new CustomEvent('itrack:albums-changed'));
+        toastSuccess('Retiré des écoutes');
+        closeAlbumModal();
+    } catch (error) {
+        toastError(error instanceof Error ? error.message : 'Impossible de retirer des écoutes');
+        unlistenStep = 0;
+    } finally {
+        unlistenBusy = false;
+        if (!overlay?.hidden) {
+            renderAlbum(currentAlbum);
+        }
+    }
 }
 
 function formatTrackLength(lengthMs) {
@@ -177,20 +297,43 @@ function ensureModal() {
     overlay.className = 'album-modal-overlay';
     overlay.hidden = true;
     overlay.innerHTML = `
-        <div class="album-modal" role="dialog" aria-modal="true" aria-labelledby="album-modal-title" tabindex="-1">
-            <button type="button" class="album-modal__close" aria-label="Fermer">×</button>
-            <div class="album-modal__body"></div>
+        <div class="album-modal-stack">
+            <div class="album-modal__actions" aria-label="Actions">
+                <button type="button" class="album-modal__action" data-action="listen" aria-label="Ajouter à mes écoutes">
+                    <span class="album-modal__action-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M3.68,19.22q-0.98-0.99-0.98-2.39t0.98-2.39t2.4-0.99q0.57,0 1.07,0.18t0.91,0.53V5.8l11.29-2V14.82q0,1.41-0.99,2.39t-2.4,0.99t-2.39-0.99t-0.98-2.39t0.98-2.39t2.4-0.99q0.57,0 1.07,0.18t0.91,0.53V7.94L9.45,9.51v7.31q0,1.41-0.99,2.39T6.07,20.2T3.68,19.22Z"/></svg>
+                    </span>
+                    <span class="album-modal__action-label">Écoutes</span>
+                </button>
+                <button type="button" class="album-modal__action" data-action="collection" aria-label="Ajouter à ma collection">
+                    <span class="album-modal__action-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M11.02,20.32H5.39q-0.71,0-1.21-0.5t-0.5-1.21V5.39q0-0.71 0.5-1.21t1.21-0.5h5.63V20.32Zm-1.4-1.4V5.08H5.39q-0.13,0-0.22,0.09T5.08,5.39V18.61q0,0.13 0.09,0.22t0.22,0.09H9.62Zm3.36-7.9V3.68h5.63q0.71,0 1.21,0.5t0.5,1.21v5.63H12.98Zm1.4-1.4h4.54V5.39q0-0.13-0.09-0.22T18.61,5.08H14.38V9.62Zm-1.4,10.7V12.98h7.34v5.63q0,0.71-0.5,1.21t-1.21,0.5H12.98Zm1.4-1.4h4.23q0.13,0 0.22-0.09t0.09-0.22V14.38H14.38v4.54ZM9.62,12Zm4.76-2.38Zm0,4.76Z"/></svg>
+                    </span>
+                    <span class="album-modal__action-label">Collection</span>
+                </button>
+            </div>
+            <div class="album-modal" role="dialog" aria-modal="true" aria-labelledby="album-modal-title" tabindex="-1">
+                <button type="button" class="album-modal__close" aria-label="Fermer">×</button>
+                <div class="album-modal__body"></div>
+            </div>
         </div>
     `;
 
     dialog = overlay.querySelector('.album-modal');
     bodyEl = overlay.querySelector('.album-modal__body');
+    actionsEl = overlay.querySelector('.album-modal__actions');
+    listenBtn = overlay.querySelector('[data-action="listen"]');
     const closeBtn = overlay.querySelector('.album-modal__close');
 
     overlay.addEventListener('click', (event) => {
         if (event.target === overlay) closeAlbumModal();
     });
     closeBtn.addEventListener('click', () => closeAlbumModal());
+    if (listenBtn) {
+        listenBtn.addEventListener('click', () => {
+            handleListenClick();
+        });
+    }
 
     document.body.appendChild(overlay);
 }
@@ -305,6 +448,11 @@ function renderAlbum(album, { loading = false } = {}) {
         content.appendChild(tracklist);
     }
 
+    const unlistenBtn = renderUnlistenButton();
+    if (unlistenBtn) {
+        content.appendChild(unlistenBtn);
+    }
+
     bodyEl.appendChild(content);
 }
 
@@ -326,6 +474,10 @@ export function closeAlbumModal() {
     overlay.hidden = true;
     document.removeEventListener('keydown', onKeydown);
     document.body.classList.remove('album-modal-open');
+    manageListens = false;
+    unlistenStep = 0;
+    unlistenBusy = false;
+    currentAlbum = null;
 
     if (lastFocus && typeof lastFocus.focus === 'function') {
         lastFocus.focus();
@@ -333,10 +485,21 @@ export function closeAlbumModal() {
     lastFocus = null;
 }
 
-export async function openAlbumModal(seed, { remote = false } = {}) {
+export async function openAlbumModal(seed, { remote = false, showActions = true } = {}) {
     ensureModal();
 
     const album = normalizeSeed(seed, { remote });
+    currentAlbum = album;
+    detailReady = !(Boolean(album.mbid) && remote);
+    listenBusy = false;
+    manageListens = !showActions;
+    unlistenStep = 0;
+    unlistenBusy = false;
+    if (actionsEl) {
+        actionsEl.hidden = !showActions;
+    }
+    syncListenButton();
+
     lastFocus = document.activeElement;
     overlay.hidden = false;
     document.body.classList.add('album-modal-open');
@@ -360,10 +523,17 @@ export async function openAlbumModal(seed, { remote = false } = {}) {
             signal: abortController.signal,
         });
         if (currentRequest !== requestId) return;
-        renderAlbum(normalizeSeed({ ...album, ...detail }, { remote: true }));
+        currentAlbum = normalizeSeed({ ...album, ...detail }, { remote: true });
+        detailReady = true;
+        syncListenButton();
+        renderAlbum(currentAlbum);
     } catch (error) {
         if (error && error.name === 'AbortError') return;
         if (currentRequest !== requestId) return;
+
+        // Allow saving the seed data even if enrichment failed.
+        detailReady = true;
+        syncListenButton();
 
         const status = bodyEl.querySelector('.album-modal__status');
         if (status) {

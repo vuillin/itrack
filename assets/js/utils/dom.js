@@ -66,6 +66,18 @@ export function coverUrl(cover) {
     return cover ? `assets/images/covers/${cover}` : '';
 }
 
+export function albumCoverUrl(album) {
+    if (!album || typeof album !== 'object') return '';
+    if (album.cover) return coverUrl(album.cover);
+    if (typeof album.mbid === 'string' && album.mbid) {
+        return `api.php?mb_cover=${encodeURIComponent(album.mbid)}`;
+    }
+    if (typeof album.cover_url === 'string' && album.cover_url) {
+        return album.cover_url;
+    }
+    return '';
+}
+
 export function formatFlags(album) {
     const labels = [];
     if (album.vinyl == 1) labels.push('Vinyl');

@@ -1,23 +1,12 @@
 ## Setup
 
 ```bash
-cp .env.example .env
-# set ITRACK_API_TOKEN
-
 php -S localhost:8000
 ```
 
 Open http://localhost:8000
 
 On first run, `albums.sqlite` is created automatically from `schema.sql`.
-
-## Environment
-
-| Variable | Required | Notes |
-|----------|----------|-------|
-| `ITRACK_API_TOKEN` | Yes (writes) | Sent as `X-Itrack-Token` on POST / PUT / PATCH / DELETE |
-
-GET is public.
 
 ## Project layout
 

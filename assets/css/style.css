@@ -453,6 +453,7 @@ ul {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 1.25rem;
+    margin-top: 1.75rem;
 }
 
 .albums-grid__empty {
@@ -542,10 +543,18 @@ ul {
     display: none !important;
 }
 
+.album-modal-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    width: min(100%, 36rem);
+    max-height: min(90vh, 48rem);
+}
+
 .album-modal {
     position: relative;
-    width: min(100%, 36rem);
-    max-height: min(90vh, 44rem);
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: auto;
     padding: 1.35rem 1.35rem 1.5rem;
     background: var(--bg-elevated);
@@ -555,16 +564,84 @@ ul {
     outline: none;
 }
 
+.album-modal__body {
+    min-width: 0;
+}
+
 .album-modal__content {
     display: flex;
     flex-direction: column;
     gap: 1.15rem;
 }
 
+.album-modal__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+    flex: 0 0 auto;
+}
+
+.album-modal__actions[hidden] {
+    display: none !important;
+}
+
+.album-modal__action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    width: 100%;
+    min-height: 3.1rem;
+    margin: 0;
+    padding: 0.7rem 1rem;
+    border: 0;
+    border-radius: 14px;
+    background: var(--bg-elevated);
+    color: var(--accent);
+    box-shadow: 0 10px 28px rgba(26, 27, 31, 0.14);
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.album-modal__action:hover:not(:disabled) {
+    background: #f3f2ef;
+}
+
+.album-modal__action:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
+.album-modal__action[data-action="collection"] {
+    cursor: default;
+}
+
+.album-modal__action-icon {
+    display: flex;
+    width: 1.35rem;
+    height: 1.35rem;
+    color: var(--accent);
+}
+
+.album-modal__action-icon svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.album-modal__action-label {
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+}
+
 .album-modal__close {
     position: absolute;
     top: 0.7rem;
     right: 0.75rem;
+    z-index: 1;
     width: 2rem;
     height: 2rem;
     margin: 0;
@@ -703,6 +780,41 @@ ul {
 
 .album-modal__status--error {
     color: #b42318;
+}
+
+.album-modal__unlisten {
+    align-self: stretch;
+    margin: 0.25rem 0 0;
+    padding: 0.7rem 1rem;
+    border: 1px solid rgba(198, 40, 40, 0.28);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--danger);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.album-modal__unlisten:hover:not(:disabled) {
+    background: rgba(198, 40, 40, 0.06);
+}
+
+.album-modal__unlisten--confirm {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+}
+
+.album-modal__unlisten--confirm:hover:not(:disabled) {
+    background: #b71c1c;
+    border-color: #b71c1c;
+}
+
+.album-modal__unlisten:disabled {
+    cursor: wait;
+    opacity: 0.65;
 }
 
 .album-modal__tracks {

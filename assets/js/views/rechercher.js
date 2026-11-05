@@ -1,7 +1,7 @@
 import { searchMusicBrainzAlbums } from '../api/client.js';
 import { openAlbumModal } from '../components/album-modal.js';
 import { getAlbums } from '../state.js';
-import { albumSearchScore, clearElement, coverUrl } from '../utils/dom.js';
+import { albumCoverUrl, albumSearchScore, clearElement } from '../utils/dom.js';
 
 const MAX_LOCAL_RESULTS = 25;
 
@@ -99,7 +99,7 @@ function createAlbumCard(album, { remote = false } = {}) {
         }
     });
 
-    const imageUrl = remote ? album.cover_url : coverUrl(album.cover);
+    const imageUrl = remote ? album.cover_url : albumCoverUrl(album);
     if (imageUrl) {
         const img = document.createElement('img');
         img.className = 'album-card__cover';

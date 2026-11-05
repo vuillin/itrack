@@ -4,8 +4,7 @@ Entry point: `api.php`
 
 ## Auth
 
-- `GET` is public.
-- `POST` / `PUT` / `PATCH` / `DELETE` require header `X-Itrack-Token` matching `ITRACK_API_TOKEN`.
+None — local personal app. All methods are open.
 
 ## Albums
 
@@ -35,18 +34,29 @@ Create an album.
 
 `title` is required. Cover filenames are normalized to `.webp`.
 
+If `last_listened_at` is set, the album is upserted by `mbid` (create or refresh) and the full snapshot is stored (`overview`, `tracks`, genres, rating MB, etc.). Response includes the saved `album`.
+
 ### `PUT api.php`
 
 Update an album. Requires `id` and `title`.
 
 ### `PATCH api.php`
 
-Toggle favorite.
+Toggle favorite:
 
 ```json
 {
   "id": 1,
   "is_favorite": 1
+}
+```
+
+Or remove from listens (`unlisten: true`). If the album has no physical formats it is deleted; otherwise only `last_listened_at` is cleared.
+
+```json
+{
+  "id": 1,
+  "unlisten": true
 }
 ```
 

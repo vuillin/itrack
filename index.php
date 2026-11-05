@@ -1,11 +1,6 @@
 <?php
 
 declare(strict_types=1);
-
-require_once __DIR__ . '/src/Env.php';
-loadEnv(__DIR__ . '/.env');
-
-$apiToken = getenv('ITRACK_API_TOKEN') ?: '';
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -35,11 +30,6 @@ $apiToken = getenv('ITRACK_API_TOKEN') ?: '';
         </main>
     </div>
 
-    <script>
-        window.__ITRACK__ = {
-            apiToken: <?= json_encode($apiToken, JSON_UNESCAPED_UNICODE) ?>
-        };
-    </script>
     <script type="module" src="assets/js/main.js"></script>
 </body>
 

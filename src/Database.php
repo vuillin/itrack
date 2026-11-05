@@ -26,10 +26,41 @@ final class Database
                     self::$pdo->exec($schema);
                 }
             }
+
+            self::migrate(self::$pdo);
         } catch (PDOException $e) {
             throw new RuntimeException('Erreur de connexion à la base de données.', 0, $e);
         }
 
         return self::$pdo;
+    }
+
+    private static function migrate(PDO $pdo): void
+    {
+        $existing = [];
+        $stmt = $pdo->query('PRAGMA table_info(albums)');
+        if ($stmt !== false) {
+            foreach ($stmt->fetchAll() as $column) {
+                if (isset($column['name']) && is_string($column['name'])) {
+                    $existing[$column['name']] = true;
+                }
+            }
+        }
+
+        $additions = [
+            'primary_type' => 'TEXT',
+            'secondary_types' => 'TEXT',
+            'first_release_date' => 'TEXT',
+            'disambiguation' => 'TEXT',
+            'tracks_json' => 'TEXT',
+            'mb_rating' => 'REAL',
+            'mb_rating_votes' => 'INTEGER',
+        ];
+
+        foreach ($additions as $name => $type) {
+            if (!isset($existing[$name])) {
+                $pdo->exec('ALTER TABLE albums ADD COLUMN ' . $name . ' ' . $type);
+            }
+        }
     }
 }

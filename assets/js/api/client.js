@@ -1,13 +1,8 @@
 const API_URL = 'api.php';
 
-function apiToken() {
-    return (window.__ITRACK__ && window.__ITRACK__.apiToken) || '';
-}
-
 function writeHeaders() {
     return {
         'Content-Type': 'application/json',
-        'X-Itrack-Token': apiToken(),
     };
 }
 
@@ -64,6 +59,18 @@ export async function createAlbum(data) {
     return response;
 }
 
+export async function markAlbumListened(data) {
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: writeHeaders(),
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+        throw new Error(await readApiError(response, 'Impossible d’enregistrer l’écoute'));
+    }
+    return response.json();
+}
+
 export async function updateAlbum(data) {
     const response = await fetch(API_URL, {
         method: 'PUT',
@@ -80,6 +87,18 @@ export async function updateFavorite(id, isFavorite) {
         body: JSON.stringify({ id, is_favorite: isFavorite }),
     });
     return response;
+}
+
+export async function unlistenAlbum(id) {
+    const response = await fetch(API_URL, {
+        method: 'PATCH',
+        headers: writeHeaders(),
+        body: JSON.stringify({ id, unlisten: true }),
+    });
+    if (!response.ok) {
+        throw new Error(await readApiError(response, 'Impossible de retirer des écoutes'));
+    }
+    return response.json();
 }
 
 export async function deleteAlbum(id) {

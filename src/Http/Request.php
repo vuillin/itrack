@@ -69,16 +69,4 @@ final class Request
         return null;
     }
 
-    public static function requireWriteToken(): void
-    {
-        $expected = getenv('ITRACK_API_TOKEN') ?: '';
-        if ($expected === '') {
-            JsonResponse::error('ITRACK_API_TOKEN manquant côté serveur.', 500);
-        }
-
-        $provided = self::header('X-Itrack-Token');
-        if ($provided === null || !hash_equals($expected, $provided)) {
-            JsonResponse::error('Token API invalide ou manquant.', 401);
-        }
-    }
 }
