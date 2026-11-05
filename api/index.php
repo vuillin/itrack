@@ -14,10 +14,17 @@ require_once dirname(__DIR__) . '/src/Http/Request.php';
 require_once dirname(__DIR__) . '/src/Http/Input.php';
 require_once __DIR__ . '/albums.php';
 require_once __DIR__ . '/musicbrainz_search.php';
+require_once __DIR__ . '/musicbrainz_release_group.php';
 require_once __DIR__ . '/musicbrainz_cover.php';
 
 if (isset($_GET['mb_cover'])) {
     $handle = musicbrainz_cover_handler();
+    $handle();
+    exit;
+}
+
+if (isset($_GET['mb_rg'])) {
+    $handle = musicbrainz_release_group_handler();
     $handle();
     exit;
 }

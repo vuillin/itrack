@@ -1,4 +1,5 @@
 import { searchMusicBrainzAlbums } from '../api/client.js';
+import { openAlbumModal } from '../components/album-modal.js';
 import { getAlbums } from '../state.js';
 import { albumSearchScore, clearElement, coverUrl } from '../utils/dom.js';
 
@@ -84,7 +85,19 @@ function createEmptyCover() {
 
 function createAlbumCard(album, { remote = false } = {}) {
     const li = document.createElement('li');
-    li.className = 'album-card';
+    li.className = 'album-card album-card--action';
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    li.setAttribute('aria-label', `${album.title || 'Album'} — ${album.artist || 'Artiste inconnu'}`);
+
+    const open = () => openAlbumModal(album, { remote });
+    li.addEventListener('click', open);
+    li.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            open();
+        }
+    });
 
     const imageUrl = remote ? album.cover_url : coverUrl(album.cover);
     if (imageUrl) {
@@ -93,6 +106,7 @@ function createAlbumCard(album, { remote = false } = {}) {
         img.src = imageUrl;
         img.alt = `Pochette de ${album.title || 'album'}`;
         img.loading = 'lazy';
+        img.draggable = false;
         img.addEventListener('error', () => {
             img.replaceWith(createEmptyCover());
         }, { once: true });

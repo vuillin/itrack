@@ -467,6 +467,20 @@ ul {
     gap: 0.65rem;
 }
 
+.album-card--action {
+    cursor: pointer;
+    border-radius: 14px;
+    outline: none;
+}
+
+.album-card--action:focus-visible .album-card__cover {
+    box-shadow: 0 0 0 2px #f59a9a;
+}
+
+.album-card--action:hover .album-card__cover {
+    border-color: rgba(26, 27, 31, 0.22);
+}
+
 .album-card__cover {
     width: 100%;
     aspect-ratio: 1;
@@ -507,6 +521,154 @@ ul {
     margin: 0.15rem 0 0;
     color: var(--text-muted);
     font-size: 0.8rem;
+}
+
+.album-modal-open {
+    overflow: hidden;
+}
+
+.album-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(26, 27, 31, 0.42);
+}
+
+.album-modal-overlay[hidden] {
+    display: none !important;
+}
+
+.album-modal {
+    position: relative;
+    width: min(100%, 34rem);
+    max-height: min(90vh, 40rem);
+    overflow: auto;
+    padding: 1.35rem 1.35rem 1.5rem;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 18px 48px rgba(26, 27, 31, 0.18);
+    outline: none;
+}
+
+.album-modal__close {
+    position: absolute;
+    top: 0.7rem;
+    right: 0.75rem;
+    width: 2rem;
+    height: 2rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 1.45rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.album-modal__close:hover {
+    color: var(--text);
+    background: rgba(26, 27, 31, 0.05);
+}
+
+.album-modal__layout {
+    display: grid;
+    grid-template-columns: 9.5rem 1fr;
+    gap: 1.15rem;
+    align-items: start;
+}
+
+.album-modal__cover {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+}
+
+.album-modal__cover--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        linear-gradient(135deg, rgba(42, 45, 52, 0.08), transparent 60%),
+        var(--bg);
+}
+
+.album-modal__cover-logo {
+    width: 42%;
+    height: auto;
+    opacity: 0.55;
+}
+
+.album-modal__info {
+    min-width: 0;
+    padding-right: 1.5rem;
+}
+
+.album-modal__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.55rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.album-modal__artist {
+    margin: 0.35rem 0 0;
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+.album-modal__meta,
+.album-modal__genres,
+.album-modal__note,
+.album-modal__annotation,
+.album-modal__status {
+    margin: 0.75rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.album-modal__genres {
+    color: var(--text);
+}
+
+.album-modal__note {
+    font-style: italic;
+}
+
+.album-modal__annotation {
+    white-space: pre-wrap;
+}
+
+.album-modal__status--error {
+    color: #b42318;
+}
+
+@media (max-width: 560px) {
+    .album-modal__layout {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        text-align: center;
+    }
+
+    .album-modal__cover {
+        width: 10.5rem;
+    }
+
+    .album-modal__info {
+        padding-right: 0;
+    }
 }
 
 .toast-host {

@@ -123,10 +123,48 @@ final class MusicBrainzService
         return MusicBrainzFetchResult::ok($items);
     }
 
+    /**
+     * Lookup a release-group by MBID for the detail sheet.
+     *
+     * @return MusicBrainzFetchResult mapped item on success
+     */
+    public function getReleaseGroup(string $mbid): MusicBrainzFetchResult
+    {
+        $mbid = trim($mbid);
+        if (!$this->isValidMbid($mbid)) {
+            return MusicBrainzFetchResult::fail(MusicBrainzFetchResult::ERROR_INVALID_QUERY);
+        }
+
+        $url = self::BASE_URL . 'release-group/' . rawurlencode($mbid) . '?' . http_build_query([
+            'inc' => 'artist-credits+genres+ratings+annotation',
+            'fmt' => 'json',
+        ]);
+
+        $fetch = $this->fetchJson($url);
+        if (!$fetch->isOk()) {
+            return $fetch;
+        }
+
+        $mapped = $this->mapReleaseGroupDetail($fetch->data ?? []);
+        if ($mapped === null) {
+            return MusicBrainzFetchResult::fail(MusicBrainzFetchResult::ERROR_INVALID_RESPONSE);
+        }
+
+        return MusicBrainzFetchResult::ok($mapped);
+    }
+
     public function normalizeType(string $type): string
     {
         $type = strtolower(trim($type));
         return array_key_exists($type, self::SEARCH_TYPES) ? $type : self::DEFAULT_TYPE;
+    }
+
+    public function isValidMbid(string $mbid): bool
+    {
+        return (bool) preg_match(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
+            $mbid
+        );
     }
 
     /**
@@ -267,6 +305,133 @@ final class MusicBrainzService
         ];
     }
 
+    /**
+     * @param array<string, mixed> $row
+     * @return array{
+     *   mbid: string,
+     *   title: string,
+     *   artist: string,
+     *   primary_type: string,
+     *   secondary_types: list<string>,
+     *   first_release_date: string|null,
+     *   disambiguation: string|null,
+     *   genres: list<string>,
+     *   rating: array{value: float, votes_count: int}|null,
+     *   annotation: string|null,
+     *   cover_url: string
+     * }|null
+     */
+    private function mapReleaseGroupDetail(array $row): ?array
+    {
+        $mbid = isset($row['id']) && is_string($row['id']) ? trim($row['id']) : '';
+        $title = isset($row['title']) && is_string($row['title']) ? trim($row['title']) : '';
+        if ($mbid === '' || $title === '') {
+            return null;
+        }
+
+        $primaryType = isset($row['primary-type']) && is_string($row['primary-type'])
+            ? $row['primary-type']
+            : '';
+
+        $secondaryTypes = [];
+        $rawSecondary = $row['secondary-types'] ?? [];
+        if (is_array($rawSecondary)) {
+            foreach ($rawSecondary as $secondaryType) {
+                if (is_string($secondaryType) && $secondaryType !== '') {
+                    $secondaryTypes[] = $secondaryType;
+                }
+            }
+        }
+
+        $date = isset($row['first-release-date']) && is_string($row['first-release-date'])
+            ? trim($row['first-release-date'])
+            : null;
+
+        $disambiguation = isset($row['disambiguation']) && is_string($row['disambiguation'])
+            ? trim($row['disambiguation'])
+            : '';
+
+        $annotation = isset($row['annotation']) && is_string($row['annotation'])
+            ? trim($row['annotation'])
+            : '';
+
+        return [
+            'mbid' => $mbid,
+            'title' => $title,
+            'artist' => $this->extractArtistCredit($row),
+            'primary_type' => $primaryType,
+            'secondary_types' => $secondaryTypes,
+            'first_release_date' => $date !== '' ? $date : null,
+            'disambiguation' => $disambiguation !== '' ? $disambiguation : null,
+            'genres' => $this->extractGenres($row),
+            'rating' => $this->extractRating($row),
+            'annotation' => $annotation !== '' ? $annotation : null,
+            'cover_url' => CoverArtService::proxyUrl($mbid),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return list<string>
+     */
+    private function extractGenres(array $row): array
+    {
+        $raw = $row['genres'] ?? [];
+        if (!is_array($raw) || $raw === []) {
+            return [];
+        }
+
+        $scored = [];
+        foreach ($raw as $genre) {
+            if (!is_array($genre)) {
+                continue;
+            }
+            $name = isset($genre['name']) && is_string($genre['name']) ? trim($genre['name']) : '';
+            if ($name === '') {
+                continue;
+            }
+            $scored[] = [
+                'name' => $name,
+                'count' => isset($genre['count']) ? (int) $genre['count'] : 0,
+            ];
+        }
+
+        usort(
+            $scored,
+            static fn(array $a, array $b): int => $b['count'] <=> $a['count']
+        );
+
+        $names = [];
+        foreach (array_slice($scored, 0, 6) as $entry) {
+            $names[] = $entry['name'];
+        }
+
+        return $names;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array{value: float, votes_count: int}|null
+     */
+    private function extractRating(array $row): ?array
+    {
+        $rating = $row['rating'] ?? null;
+        if (!is_array($rating)) {
+            return null;
+        }
+
+        $value = isset($rating['value']) ? (float) $rating['value'] : 0.0;
+        $votes = isset($rating['votes-count']) ? (int) $rating['votes-count'] : 0;
+        if ($value <= 0 || $votes <= 0) {
+            return null;
+        }
+
+        return [
+            'value' => round($value, 1),
+            'votes_count' => $votes,
+        ];
+    }
+
     private function matchesQuery(string $title, string $artist, string $titleQuery, string $artistQuery): bool
     {
         $normalizedTitle = $this->normalize($title);
@@ -394,6 +559,10 @@ final class MusicBrainzService
 
         if ($body === false || $curlErrno !== 0) {
             return MusicBrainzFetchResult::fail(MusicBrainzFetchResult::ERROR_NETWORK);
+        }
+
+        if ($status === 404) {
+            return MusicBrainzFetchResult::fail(MusicBrainzFetchResult::ERROR_NOT_FOUND);
         }
 
         if ($status === 503) {

@@ -19,6 +19,18 @@ export async function fetchAlbums() {
     return response.json();
 }
 
+async function readApiError(response, fallback) {
+    try {
+        const body = await response.json();
+        if (body && typeof body.error === 'string' && body.error) {
+            return body.error;
+        }
+    } catch {
+        // keep fallback
+    }
+    return fallback;
+}
+
 export async function searchMusicBrainzAlbums(query, { artist = '', type = 'album', signal } = {}) {
     const params = new URLSearchParams({
         mb_search: '1',
@@ -29,16 +41,16 @@ export async function searchMusicBrainzAlbums(query, { artist = '', type = 'albu
 
     const response = await fetch(`${API_URL}?${params.toString()}`, { signal });
     if (!response.ok) {
-        let message = 'Impossible de chercher sur MusicBrainz';
-        try {
-            const body = await response.json();
-            if (body && typeof body.error === 'string' && body.error) {
-                message = body.error;
-            }
-        } catch {
-            // keep default message
-        }
-        throw new Error(message);
+        throw new Error(await readApiError(response, 'Impossible de chercher sur MusicBrainz'));
+    }
+    return response.json();
+}
+
+export async function fetchMusicBrainzReleaseGroup(mbid, { signal } = {}) {
+    const params = new URLSearchParams({ mb_rg: mbid });
+    const response = await fetch(`${API_URL}?${params.toString()}`, { signal });
+    if (!response.ok) {
+        throw new Error(await readApiError(response, 'Impossible de charger la fiche'));
     }
     return response.json();
 }

@@ -8,6 +8,7 @@ final class MusicBrainzFetchResult
     public const ERROR_RATE_LIMITED = 'rate_limited';
     public const ERROR_INVALID_RESPONSE = 'invalid_response';
     public const ERROR_INVALID_QUERY = 'invalid_query';
+    public const ERROR_NOT_FOUND = 'not_found';
 
     private function __construct(
         public readonly ?array $data,
@@ -37,6 +38,7 @@ final class MusicBrainzFetchResult
             self::ERROR_RATE_LIMITED => ['MusicBrainz temporairement saturé', 503],
             self::ERROR_INVALID_RESPONSE => ['Réponse MusicBrainz invalide', 502],
             self::ERROR_INVALID_QUERY => ['Requête de recherche invalide', 400],
+            self::ERROR_NOT_FOUND => ['Release group introuvable', 404],
         ];
 
         [$message, $status] = $map[$this->error] ?? ['Erreur MusicBrainz', 502];

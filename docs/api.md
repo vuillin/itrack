@@ -86,6 +86,26 @@ Search release-groups on MusicBrainz.
 }
 ```
 
+### `GET api.php?mb_rg={mbid}`
+
+Lookup a release-group by MBID (detail sheet).
+
+```json
+{
+  "mbid": "b1392450-e666-3926-a536-22c65f834433",
+  "title": "OK Computer",
+  "artist": "Radiohead",
+  "primary_type": "Album",
+  "secondary_types": [],
+  "first_release_date": "1997-05-21",
+  "disambiguation": null,
+  "genres": ["alternative rock", "art rock"],
+  "rating": { "value": 4.5, "votes_count": 12 },
+  "annotation": null,
+  "cover_url": "api.php?mb_cover=b1392450-e666-3926-a536-22c65f834433"
+}
+```
+
 ### `GET api.php?mb_cover={mbid}`
 
 Proxy + cache local for Cover Art Archive front thumbnails (`cache/covers/`).  
