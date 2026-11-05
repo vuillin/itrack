@@ -136,7 +136,7 @@ final class MusicBrainzService
         }
 
         $url = self::BASE_URL . 'release-group/' . rawurlencode($mbid) . '?' . http_build_query([
-            'inc' => 'artist-credits+genres+ratings+annotation',
+            'inc' => 'artist-credits+genres+ratings+annotation+url-rels',
             'fmt' => 'json',
         ]);
 
@@ -149,6 +149,15 @@ final class MusicBrainzService
         if ($mapped === null) {
             return MusicBrainzFetchResult::fail(MusicBrainzFetchResult::ERROR_INVALID_RESPONSE);
         }
+
+        $wikiSummary = WikipediaService::summaryFromRelations($fetch->data['relations'] ?? null);
+        $mapped['description'] = $wikiSummary ?? $mapped['annotation'];
+
+        // Tracklists live on releases, not release-groups (extra MB call).
+        $mapped['tracks'] = $this->fetchTracklist(
+            $mbid,
+            is_string($mapped['first_release_date'] ?? null) ? $mapped['first_release_date'] : null
+        );
 
         return MusicBrainzFetchResult::ok($mapped);
     }
@@ -306,6 +315,198 @@ final class MusicBrainzService
     }
 
     /**
+     * @return list<array{disc: int, number: string, title: string, length_ms: int|null}>
+     */
+    private function fetchTracklist(string $releaseGroupMbid, ?string $preferredDate): array
+    {
+        // MusicBrainz asks for ~1 req/s.
+        usleep(1_100_000);
+
+        $releases = $this->browseReleasesWithRecordings($releaseGroupMbid, true);
+        if ($releases === []) {
+            usleep(1_100_000);
+            $releases = $this->browseReleasesWithRecordings($releaseGroupMbid, false);
+        }
+
+        if ($releases === []) {
+            return [];
+        }
+
+        $release = $this->pickRelease($releases, $preferredDate);
+        return $release === null ? [] : $this->extractTracks($release);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function browseReleasesWithRecordings(string $releaseGroupMbid, bool $officialOnly): array
+    {
+        $params = [
+            'release-group' => $releaseGroupMbid,
+            'inc' => 'recordings',
+            'fmt' => 'json',
+            'limit' => 8,
+        ];
+        if ($officialOnly) {
+            $params['status'] = 'official';
+        }
+
+        $fetch = $this->fetchJson(self::BASE_URL . 'release?' . http_build_query($params));
+        if (!$fetch->isOk() || !is_array($fetch->data)) {
+            return [];
+        }
+
+        $rows = $fetch->data['releases'] ?? null;
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $releases = [];
+        foreach ($rows as $row) {
+            if (is_array($row)) {
+                $releases[] = $row;
+            }
+        }
+
+        return $releases;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $releases
+     * @return array<string, mixed>|null
+     */
+    private function pickRelease(array $releases, ?string $preferredDate): ?array
+    {
+        if ($releases === []) {
+            return null;
+        }
+
+        $scored = [];
+        foreach ($releases as $index => $release) {
+            $media = $release['media'] ?? null;
+            if (!is_array($media) || $media === []) {
+                continue;
+            }
+
+            $trackCount = 0;
+            foreach ($media as $medium) {
+                if (!is_array($medium)) {
+                    continue;
+                }
+                $tracks = $medium['tracks'] ?? null;
+                if (is_array($tracks)) {
+                    $trackCount += count($tracks);
+                }
+            }
+            if ($trackCount === 0) {
+                continue;
+            }
+
+            $date = isset($release['date']) && is_string($release['date']) ? $release['date'] : '';
+            $score = $trackCount;
+            if ($preferredDate !== null && $preferredDate !== '' && $date === $preferredDate) {
+                $score += 1000;
+            } elseif ($preferredDate !== null && $preferredDate !== '' && str_starts_with($date, substr($preferredDate, 0, 4))) {
+                $score += 200;
+            }
+
+            $scored[] = [
+                'release' => $release,
+                'score' => $score,
+                'index' => $index,
+            ];
+        }
+
+        if ($scored === []) {
+            return null;
+        }
+
+        usort(
+            $scored,
+            static function (array $a, array $b): int {
+                if ($b['score'] !== $a['score']) {
+                    return $b['score'] <=> $a['score'];
+                }
+                return $a['index'] <=> $b['index'];
+            }
+        );
+
+        return $scored[0]['release'];
+    }
+
+    /**
+     * @param array<string, mixed> $release
+     * @return list<array{disc: int, number: string, title: string, length_ms: int|null}>
+     */
+    private function extractTracks(array $release): array
+    {
+        $media = $release['media'] ?? null;
+        if (!is_array($media)) {
+            return [];
+        }
+
+        $tracks = [];
+        foreach ($media as $medium) {
+            if (!is_array($medium)) {
+                continue;
+            }
+
+            $disc = isset($medium['position']) ? (int) $medium['position'] : 1;
+            if ($disc < 1) {
+                $disc = 1;
+            }
+
+            $rawTracks = $medium['tracks'] ?? null;
+            if (!is_array($rawTracks)) {
+                continue;
+            }
+
+            foreach ($rawTracks as $track) {
+                if (!is_array($track)) {
+                    continue;
+                }
+
+                $title = '';
+                if (isset($track['title']) && is_string($track['title'])) {
+                    $title = trim($track['title']);
+                } elseif (
+                    isset($track['recording']) && is_array($track['recording'])
+                    && isset($track['recording']['title']) && is_string($track['recording']['title'])
+                ) {
+                    $title = trim($track['recording']['title']);
+                }
+
+                if ($title === '') {
+                    continue;
+                }
+
+                $number = isset($track['number']) && (is_string($track['number']) || is_int($track['number']))
+                    ? trim((string) $track['number'])
+                    : '';
+
+                $length = null;
+                if (isset($track['length']) && is_numeric($track['length'])) {
+                    $length = (int) $track['length'];
+                } elseif (
+                    isset($track['recording']) && is_array($track['recording'])
+                    && isset($track['recording']['length']) && is_numeric($track['recording']['length'])
+                ) {
+                    $length = (int) $track['recording']['length'];
+                }
+
+                $tracks[] = [
+                    'disc' => $disc,
+                    'number' => $number !== '' ? $number : (string) (count($tracks) + 1),
+                    'title' => $title,
+                    'length_ms' => $length !== null && $length > 0 ? $length : null,
+                ];
+            }
+        }
+
+        return $tracks;
+    }
+
+    /**
      * @param array<string, mixed> $row
      * @return array{
      *   mbid: string,
@@ -318,7 +519,9 @@ final class MusicBrainzService
      *   genres: list<string>,
      *   rating: array{value: float, votes_count: int}|null,
      *   annotation: string|null,
-     *   cover_url: string
+     *   description: string|null,
+     *   cover_url: string,
+     *   tracks: list<array{disc: int, number: string, title: string, length_ms: int|null}>
      * }|null
      */
     private function mapReleaseGroupDetail(array $row): ?array
@@ -366,7 +569,9 @@ final class MusicBrainzService
             'genres' => $this->extractGenres($row),
             'rating' => $this->extractRating($row),
             'annotation' => $annotation !== '' ? $annotation : null,
+            'description' => null,
             'cover_url' => CoverArtService::proxyUrl($mbid),
+            'tracks' => [],
         ];
     }
 
@@ -402,7 +607,7 @@ final class MusicBrainzService
         );
 
         $names = [];
-        foreach (array_slice($scored, 0, 6) as $entry) {
+        foreach (array_slice($scored, 0, 3) as $entry) {
             $names[] = $entry['name'];
         }
 

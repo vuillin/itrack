@@ -16,14 +16,26 @@ function yearFromDate(value) {
 }
 
 function normalizeSeed(seed = {}, { remote = false } = {}) {
-    const genres = Array.isArray(seed.genres)
+    const genres = (Array.isArray(seed.genres)
         ? seed.genres.filter((g) => typeof g === 'string' && g.trim())
         : typeof seed.genres === 'string'
             ? seed.genres.split(',').map((g) => g.trim()).filter(Boolean)
-            : [];
+            : []
+    ).slice(0, 3);
 
     const secondary = Array.isArray(seed.secondary_types)
         ? seed.secondary_types.filter((t) => typeof t === 'string' && t.trim())
+        : [];
+
+    const tracks = Array.isArray(seed.tracks)
+        ? seed.tracks
+            .filter((track) => track && typeof track.title === 'string' && track.title.trim())
+            .map((track) => ({
+                disc: Number(track.disc) > 0 ? Number(track.disc) : 1,
+                number: track.number != null ? String(track.number) : '',
+                title: track.title.trim(),
+                length_ms: Number.isFinite(Number(track.length_ms)) ? Number(track.length_ms) : null,
+            }))
         : [];
 
     return {
@@ -37,11 +49,75 @@ function normalizeSeed(seed = {}, { remote = false } = {}) {
         disambiguation: seed.disambiguation || null,
         genres,
         rating: seed.rating && typeof seed.rating === 'object' ? seed.rating : null,
-        annotation: seed.annotation || seed.overview || null,
+        description: seed.description || seed.annotation || seed.overview || null,
         cover_url: remote
             ? (seed.cover_url || '')
             : (seed.cover_url || coverUrl(seed.cover)),
+        tracks,
     };
+}
+
+function formatTrackLength(lengthMs) {
+    const totalSeconds = Math.round(Number(lengthMs) / 1000);
+    if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return '';
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+}
+
+function renderTracklist(tracks) {
+    if (!tracks.length) return null;
+
+    const section = document.createElement('section');
+    section.className = 'album-modal__tracks';
+    section.setAttribute('aria-label', 'Pistes');
+
+    const heading = document.createElement('h3');
+    heading.className = 'album-modal__tracks-title';
+    heading.textContent = 'Pistes';
+    section.appendChild(heading);
+
+    const list = document.createElement('ol');
+    list.className = 'album-modal__track-list';
+
+    let lastDisc = null;
+    const multiDisc = tracks.some((track) => track.disc > 1);
+
+    tracks.forEach((track) => {
+        if (multiDisc && track.disc !== lastDisc) {
+            const disc = document.createElement('li');
+            disc.className = 'album-modal__disc';
+            disc.textContent = `Disque ${track.disc}`;
+            list.appendChild(disc);
+            lastDisc = track.disc;
+        }
+
+        const item = document.createElement('li');
+        item.className = 'album-modal__track';
+
+        const number = document.createElement('span');
+        number.className = 'album-modal__track-number';
+        number.textContent = track.number || '';
+        item.appendChild(number);
+
+        const title = document.createElement('span');
+        title.className = 'album-modal__track-title';
+        title.textContent = track.title;
+        item.appendChild(title);
+
+        const length = formatTrackLength(track.length_ms);
+        if (length) {
+            const duration = document.createElement('span');
+            duration.className = 'album-modal__track-length';
+            duration.textContent = length;
+            item.appendChild(duration);
+        }
+
+        list.appendChild(item);
+    });
+
+    section.appendChild(list);
+    return section;
 }
 
 function typeLine(album) {
@@ -61,14 +137,35 @@ function metaLine(album) {
     const year = yearFromDate(album.first_release_date) || String(album.release_year || '');
     if (year) parts.push(year);
 
-    if (album.rating && album.rating.value) {
-        const votes = album.rating.votes_count
-            ? ` (${album.rating.votes_count})`
-            : '';
-        parts.push(`${album.rating.value}/5${votes}`);
+    return parts.join(' · ');
+}
+
+function renderStars(rating) {
+    const value = Number(rating?.value) || 0;
+    if (value <= 0) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'album-modal__rating';
+    wrap.setAttribute('role', 'img');
+    wrap.setAttribute('aria-label', `${value} sur 5`);
+
+    for (let i = 1; i <= 5; i += 1) {
+        const star = document.createElement('span');
+        star.className = 'album-modal__star';
+        star.setAttribute('aria-hidden', 'true');
+        star.textContent = '★';
+
+        const filled = value - (i - 1);
+        if (filled >= 0.75) {
+            star.classList.add('album-modal__star--full');
+        } else if (filled >= 0.25) {
+            star.classList.add('album-modal__star--half');
+        }
+
+        wrap.appendChild(star);
     }
 
-    return parts.join(' · ');
+    return wrap;
 }
 
 function ensureModal() {
@@ -131,6 +228,9 @@ function renderAlbum(album, { loading = false } = {}) {
     ensureModal();
     bodyEl.replaceChildren();
 
+    const content = document.createElement('div');
+    content.className = 'album-modal__content';
+
     const layout = document.createElement('div');
     layout.className = 'album-modal__layout';
 
@@ -158,6 +258,11 @@ function renderAlbum(album, { loading = false } = {}) {
         info.appendChild(metaEl);
     }
 
+    const stars = renderStars(album.rating);
+    if (stars) {
+        info.appendChild(stars);
+    }
+
     if (album.disambiguation) {
         const note = document.createElement('p');
         note.className = 'album-modal__note';
@@ -166,17 +271,16 @@ function renderAlbum(album, { loading = false } = {}) {
     }
 
     if (album.genres.length) {
-        const genres = document.createElement('p');
+        const genres = document.createElement('ul');
         genres.className = 'album-modal__genres';
-        genres.textContent = album.genres.join(' · ');
+        genres.setAttribute('aria-label', 'Genres');
+        album.genres.forEach((name) => {
+            const item = document.createElement('li');
+            item.className = 'album-modal__genre';
+            item.textContent = name;
+            genres.appendChild(item);
+        });
         info.appendChild(genres);
-    }
-
-    if (album.annotation) {
-        const annotation = document.createElement('p');
-        annotation.className = 'album-modal__annotation';
-        annotation.textContent = album.annotation;
-        info.appendChild(annotation);
     }
 
     if (loading) {
@@ -187,7 +291,21 @@ function renderAlbum(album, { loading = false } = {}) {
     }
 
     layout.appendChild(info);
-    bodyEl.appendChild(layout);
+    content.appendChild(layout);
+
+    if (album.description) {
+        const description = document.createElement('p');
+        description.className = 'album-modal__description';
+        description.textContent = album.description;
+        content.appendChild(description);
+    }
+
+    const tracklist = renderTracklist(album.tracks);
+    if (tracklist) {
+        content.appendChild(tracklist);
+    }
+
+    bodyEl.appendChild(content);
 }
 
 function onKeydown(event) {

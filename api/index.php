@@ -7,6 +7,7 @@ require_once dirname(__DIR__) . '/src/AlbumRepository.php';
 require_once dirname(__DIR__) . '/src/MusicBrainzFetchResult.php';
 require_once dirname(__DIR__) . '/src/MusicBrainzService.php';
 require_once dirname(__DIR__) . '/src/CoverArtService.php';
+require_once dirname(__DIR__) . '/src/WikipediaService.php';
 require_once dirname(__DIR__) . '/src/Logger.php';
 require_once dirname(__DIR__) . '/src/Http/JsonResponseException.php';
 require_once dirname(__DIR__) . '/src/Http/JsonResponse.php';

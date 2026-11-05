@@ -99,12 +99,19 @@ Lookup a release-group by MBID (detail sheet).
   "secondary_types": [],
   "first_release_date": "1997-05-21",
   "disambiguation": null,
-  "genres": ["alternative rock", "art rock"],
+  "genres": ["alternative rock", "art rock", "rock"],
   "rating": { "value": 4.5, "votes_count": 12 },
   "annotation": null,
-  "cover_url": "api.php?mb_cover=b1392450-e666-3926-a536-22c65f834433"
+  "description": "OK Computer is the third studio album by the English rock band Radiohead…",
+  "cover_url": "api.php?mb_cover=b1392450-e666-3926-a536-22c65f834433",
+  "tracks": [
+    { "disc": 1, "number": "1", "title": "Airbag", "length_ms": 284000 }
+  ]
 }
 ```
+
+`description` comes from Wikipedia/Wikidata (via MusicBrainz url-rels), falling back to the MB annotation.  
+Tracklist comes from a representative official release of the release-group (extra MusicBrainz call).
 
 ### `GET api.php?mb_cover={mbid}`
 
