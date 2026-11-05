@@ -60,13 +60,19 @@ Toggle favorite.
 
 ## MusicBrainz search
 
-### `GET api.php?mb_search=1&q=...`
+### `GET api.php?mb_search=1&q=...&artist=...&type=album`
 
-Search album/EP release-groups on MusicBrainz (title/artist fields, score ≥ 80, excludes compilations/live/remixes/Various Artists).
+Search release-groups on MusicBrainz.
+
+- `q` — album title (optional if `artist` is set)
+- `artist` — artist name (optional if `q` is set)
+- `type` (optional, default `album`): `album` | `ep` | `single` | `live` | `compilation` | `remix` | `soundtrack`
 
 ```json
 {
-  "query": "radiohead",
+  "query": "OK Computer",
+  "artist": "Radiohead",
+  "type": "album",
   "items": [
     {
       "mbid": "b1392450-e666-3926-a536-22c65f834433",
@@ -74,8 +80,13 @@ Search album/EP release-groups on MusicBrainz (title/artist fields, score ≥ 80
       "artist": "Radiohead",
       "primary_type": "Album",
       "first_release_date": "1997-05-21",
-      "cover_url": "https://coverartarchive.org/release-group/b1392450-e666-3926-a536-22c65f834433/front-250"
+      "cover_url": "api.php?mb_cover=b1392450-e666-3926-a536-22c65f834433"
     }
   ]
 }
 ```
+
+### `GET api.php?mb_cover={mbid}`
+
+Proxy + cache local for Cover Art Archive front thumbnails (`cache/covers/`).  
+Returns the image bytes, or `404` when no cover exists.

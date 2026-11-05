@@ -4,9 +4,68 @@ import { albumSearchScore, clearElement, coverUrl } from '../utils/dom.js';
 
 const MAX_LOCAL_RESULTS = 25;
 
-let lastQuery = '';
+let lastTitleQuery = '';
+let lastArtistQuery = '';
 let mbAbortController = null;
 let mbRequestId = 0;
+
+function getTypeSelect() {
+    return document.getElementById('search-type');
+}
+
+function getSelectedType() {
+    const select = getTypeSelect();
+    if (!select || typeof select.value !== 'string' || !select.value) {
+        return 'album';
+    }
+    return select.value;
+}
+
+function getSelectedOption() {
+    const select = getTypeSelect();
+    if (!select || select.selectedIndex < 0) return null;
+    return select.options[select.selectedIndex] || null;
+}
+
+function getTitleInput() {
+    return document.getElementById('search-input');
+}
+
+function getArtistInput() {
+    return document.getElementById('search-artist');
+}
+
+function typeLabel() {
+    const option = getSelectedOption();
+    const label = option?.textContent?.trim();
+    return label || 'Albums';
+}
+
+function titlePlaceholder() {
+    const option = getSelectedOption();
+    const placeholder = option?.dataset?.placeholder?.trim();
+    return placeholder || 'Album';
+}
+
+function updateMbSectionTitle() {
+    const title = document.getElementById('search-mb-title');
+    if (title) {
+        title.textContent = typeLabel();
+    }
+}
+
+function updateTitlePlaceholder() {
+    const input = getTitleInput();
+    if (!input) return;
+
+    const placeholder = titlePlaceholder();
+    input.placeholder = placeholder;
+
+    const labelText = document.querySelector('label[for="search-input"] .visually-hidden');
+    if (labelText) {
+        labelText.textContent = placeholder;
+    }
+}
 
 function createEmptyCover() {
     const placeholder = document.createElement('div');
@@ -34,12 +93,9 @@ function createAlbumCard(album, { remote = false } = {}) {
         img.src = imageUrl;
         img.alt = `Pochette de ${album.title || 'album'}`;
         img.loading = 'lazy';
-        if (remote) {
-            img.referrerPolicy = 'no-referrer';
-        }
         img.addEventListener('error', () => {
             img.replaceWith(createEmptyCover());
-        });
+        }, { once: true });
         li.appendChild(img);
     } else {
         li.appendChild(createEmptyCover());
@@ -133,15 +189,19 @@ function hideMusicBrainzRow() {
     syncResultsVisibility();
 }
 
-function renderLocalResults(query) {
-    const needle = query.trim();
-    if (!needle) {
+function renderLocalResults(titleQuery, artistQuery) {
+    const titleNeedle = titleQuery.trim();
+    const artistNeedle = artistQuery.trim();
+    if (!titleNeedle && !artistNeedle) {
         renderLocalCollection([]);
         return;
     }
 
     const ranked = getAlbums()
-        .map((album) => ({ album, score: albumSearchScore(album, needle) }))
+        .map((album) => ({
+            album,
+            score: albumSearchScore(album, titleNeedle, artistNeedle),
+        }))
         .filter((entry) => entry.score > 0)
         .sort((a, b) => {
             if (b.score !== a.score) return b.score - a.score;
@@ -155,9 +215,12 @@ function renderLocalResults(query) {
     renderLocalCollection(ranked);
 }
 
-async function renderMusicBrainzResults(query) {
-    const needle = query.trim();
-    if (!needle) {
+async function renderMusicBrainzResults(titleQuery, artistQuery, type = getSelectedType()) {
+    const titleNeedle = titleQuery.trim();
+    const artistNeedle = artistQuery.trim();
+    updateMbSectionTitle();
+
+    if (!titleNeedle && !artistNeedle) {
         if (mbAbortController) {
             mbAbortController.abort();
             mbAbortController = null;
@@ -181,7 +244,9 @@ async function renderMusicBrainzResults(query) {
     syncResultsVisibility();
 
     try {
-        const payload = await searchMusicBrainzAlbums(needle, {
+        const payload = await searchMusicBrainzAlbums(titleNeedle, {
+            artist: artistNeedle,
+            type,
             signal: mbAbortController.signal,
         });
         if (requestId !== mbRequestId) return;
@@ -204,19 +269,34 @@ async function renderMusicBrainzResults(query) {
     }
 }
 
-export function renderSearchResults(query = lastQuery) {
-    lastQuery = typeof query === 'string' ? query : '';
-    renderLocalResults(lastQuery);
-    renderMusicBrainzResults(lastQuery);
+export function renderSearchResults(titleQuery = lastTitleQuery, artistQuery = lastArtistQuery) {
+    lastTitleQuery = typeof titleQuery === 'string' ? titleQuery : '';
+    lastArtistQuery = typeof artistQuery === 'string' ? artistQuery : '';
+    const type = getSelectedType();
+    renderLocalResults(lastTitleQuery, lastArtistQuery);
+    renderMusicBrainzResults(lastTitleQuery, lastArtistQuery, type);
 }
 
 export function initSearch() {
     const form = document.getElementById('search-form');
-    const input = document.getElementById('search-input');
-    if (!form || !input) return;
+    const titleInput = getTitleInput();
+    const artistInput = getArtistInput();
+    const typeSelect = getTypeSelect();
+    if (!form || !titleInput) return;
+
+    updateMbSectionTitle();
+    updateTitlePlaceholder();
 
     form.addEventListener('submit', (event) => {
         event.preventDefault();
-        renderSearchResults(input.value);
+        renderSearchResults(titleInput.value, artistInput ? artistInput.value : '');
     });
+
+    if (typeSelect) {
+        typeSelect.addEventListener('change', () => {
+            updateMbSectionTitle();
+            updateTitlePlaceholder();
+            renderSearchResults(titleInput.value, artistInput ? artistInput.value : '');
+        });
+    }
 }

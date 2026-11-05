@@ -19,11 +19,14 @@ export async function fetchAlbums() {
     return response.json();
 }
 
-export async function searchMusicBrainzAlbums(query, { signal } = {}) {
+export async function searchMusicBrainzAlbums(query, { artist = '', type = 'album', signal } = {}) {
     const params = new URLSearchParams({
         mb_search: '1',
-        q: query,
+        type,
     });
+    if (query) params.set('q', query);
+    if (artist) params.set('artist', artist);
+
     const response = await fetch(`${API_URL}?${params.toString()}`, { signal });
     if (!response.ok) {
         let message = 'Impossible de chercher sur MusicBrainz';

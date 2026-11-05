@@ -174,12 +174,21 @@ ul {
     border: 0;
 }
 
+.search-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
 .search-bar {
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    width: min(100%, 42rem);
-    margin-top: 1.5rem;
+    flex: 1 1 11rem;
+    min-width: 0;
+    max-width: 18rem;
     padding: 0.7rem 1.15rem;
     background: #f0efed;
     border: 2px solid transparent;
@@ -187,9 +196,76 @@ ul {
     transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
+.search-bar--title {
+    max-width: 19.2rem;
+}
+
+.search-bar--artist {
+    max-width: 14rem;
+}
+
 .search-bar:focus-within {
     border-color: #f59a9a;
     background: #f7f6f4;
+}
+
+.search-type {
+    display: block;
+    flex: 0 0 auto;
+}
+
+.search-type__select {
+    appearance: none;
+    -webkit-appearance: none;
+    min-width: 9.5rem;
+    padding: 0.7rem 2.4rem 0.7rem 1.15rem;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238a8d94' d='M1.4 1.2 6 5.8l4.6-4.6 1.1 1.1L6 8 0.3 2.3z'/%3E%3C/svg%3E")
+        no-repeat right 1rem center,
+        #f0efed;
+    color: var(--text);
+    font: inherit;
+    font-size: 1.05rem;
+    line-height: 1.2;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.search-type__select:hover {
+    background-color: #f7f6f4;
+}
+
+.search-type__select:focus {
+    border-color: #f59a9a;
+    background-color: #f7f6f4;
+}
+
+.search-submit {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0.7rem 1.25rem;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.search-submit:hover {
+    opacity: 0.92;
+}
+
+.search-submit:focus-visible {
+    outline: 2px solid #f59a9a;
+    outline-offset: 2px;
 }
 
 .search-bar__label {

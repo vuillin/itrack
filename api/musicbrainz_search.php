@@ -14,22 +14,30 @@ function musicbrainz_search_handler(): callable
             JsonResponse::error('Méthode non autorisée', 405);
         }
 
-        $query = isset($_GET['q']) && is_string($_GET['q']) ? trim($_GET['q']) : '';
-        if ($query === '') {
-            JsonResponse::error('Paramètre q obligatoire');
+        $title = isset($_GET['q']) && is_string($_GET['q']) ? trim($_GET['q']) : '';
+        $artist = isset($_GET['artist']) && is_string($_GET['artist']) ? trim($_GET['artist']) : '';
+
+        if ($title === '' && $artist === '') {
+            JsonResponse::error('Indique un album et/ou un artiste');
         }
 
-        if (mb_strlen($query) > 200) {
+        if (mb_strlen($title) > 200 || mb_strlen($artist) > 200) {
             JsonResponse::error('Requête trop longue');
         }
 
-        $result = $musicBrainz->searchAlbums($query);
+        $type = isset($_GET['type']) && is_string($_GET['type'])
+            ? $musicBrainz->normalizeType($_GET['type'])
+            : MusicBrainzService::DEFAULT_TYPE;
+
+        $result = $musicBrainz->searchAlbums($title, $artist, $type);
         if (!$result->isOk()) {
             $result->respondAsJsonError();
         }
 
         JsonResponse::send([
-            'query' => $query,
+            'query' => $title,
+            'artist' => $artist,
+            'type' => $type,
             'items' => $result->data,
         ]);
     };

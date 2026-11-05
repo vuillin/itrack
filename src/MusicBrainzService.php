@@ -5,42 +5,91 @@ declare(strict_types=1);
 final class MusicBrainzService
 {
     private const BASE_URL = 'https://musicbrainz.org/ws/2/';
-    private const COVER_ART_FRONT = 'https://coverartarchive.org/release-group/%s/front-250';
     private const USER_AGENT = 'iTrack/0.1 (personal music library; local)';
     private const DEFAULT_LIMIT = 10;
     private const FETCH_LIMIT = 30;
     private const MIN_SCORE = 80;
+    public const DEFAULT_TYPE = 'album';
 
-    /** @var list<string> */
-    private const BLOCKED_SECONDARY_TYPES = [
-        'Compilation',
-        'Live',
-        'Remix',
-        'Soundtrack',
-        'DJ-mix',
-        'Interview',
-        'Demo',
-        'Mixtape/Street',
-        'Spokenword',
-        'Audiobook',
+    /**
+     * Search categories exposed by the UI / API.
+     *
+     * @var array<string, array{label: string, placeholder: string, primary: list<string>, secondary: string|null, exclude_secondary: list<string>}>
+     */
+    public const SEARCH_TYPES = [
+        'album' => [
+            'label' => 'Albums',
+            'placeholder' => 'Album',
+            'primary' => ['Album'],
+            'secondary' => null,
+            'exclude_secondary' => ['Compilation', 'Live', 'Remix', 'Soundtrack', 'DJ-mix', 'Interview', 'Demo', 'Mixtape/Street'],
+        ],
+        'ep' => [
+            'label' => 'EP',
+            'placeholder' => 'EP',
+            'primary' => ['EP'],
+            'secondary' => null,
+            'exclude_secondary' => ['Compilation', 'Live', 'Remix', 'Soundtrack', 'DJ-mix', 'Interview', 'Demo', 'Mixtape/Street'],
+        ],
+        'single' => [
+            'label' => 'Singles',
+            'placeholder' => 'Single',
+            'primary' => ['Single'],
+            'secondary' => null,
+            'exclude_secondary' => ['Compilation', 'Live', 'Remix', 'Soundtrack', 'DJ-mix', 'Interview', 'Demo', 'Mixtape/Street'],
+        ],
+        'live' => [
+            'label' => 'Live',
+            'placeholder' => 'Live',
+            'primary' => ['Album', 'EP'],
+            'secondary' => 'Live',
+            'exclude_secondary' => [],
+        ],
+        'compilation' => [
+            'label' => 'Compilations',
+            'placeholder' => 'Compilation',
+            'primary' => ['Album', 'EP'],
+            'secondary' => 'Compilation',
+            'exclude_secondary' => [],
+        ],
+        'remix' => [
+            'label' => 'Remix',
+            'placeholder' => 'Remix',
+            'primary' => ['Album', 'EP', 'Single'],
+            'secondary' => 'Remix',
+            'exclude_secondary' => [],
+        ],
+        'soundtrack' => [
+            'label' => 'Soundtracks',
+            'placeholder' => 'Soundtrack',
+            'primary' => ['Album', 'EP'],
+            'secondary' => 'Soundtrack',
+            'exclude_secondary' => [],
+        ],
     ];
 
     /**
-     * Search album/EP release-groups by free text.
+     * Search release-groups by album title and/or artist and category.
      *
      * @return MusicBrainzFetchResult list of items on success
      */
-    public function searchAlbums(string $query, int $limit = self::DEFAULT_LIMIT): MusicBrainzFetchResult
-    {
-        $query = trim($query);
-        if ($query === '') {
+    public function searchAlbums(
+        string $titleQuery,
+        string $artistQuery = '',
+        string $type = self::DEFAULT_TYPE,
+        int $limit = self::DEFAULT_LIMIT
+    ): MusicBrainzFetchResult {
+        $titleQuery = trim($titleQuery);
+        $artistQuery = trim($artistQuery);
+        if ($titleQuery === '' && $artistQuery === '') {
             return MusicBrainzFetchResult::fail(MusicBrainzFetchResult::ERROR_INVALID_QUERY);
         }
 
+        $type = $this->normalizeType($type);
         $limit = max(1, min(100, $limit));
 
         $url = self::BASE_URL . 'release-group?' . http_build_query([
-            'query' => $this->buildLuceneQuery($query),
+            'query' => $this->buildLuceneQuery($titleQuery, $artistQuery, $type),
             'fmt' => 'json',
             'limit' => self::FETCH_LIMIT,
         ]);
@@ -61,7 +110,7 @@ final class MusicBrainzService
                 continue;
             }
 
-            $mapped = $this->mapReleaseGroup($row, $query);
+            $mapped = $this->mapReleaseGroup($row, $titleQuery, $artistQuery, $type);
             if ($mapped !== null) {
                 $items[] = $mapped;
             }
@@ -74,23 +123,57 @@ final class MusicBrainzService
         return MusicBrainzFetchResult::ok($items);
     }
 
-    private function buildLuceneQuery(string $query): string
+    public function normalizeType(string $type): string
     {
-        $phrase = $this->quotePhrase($query);
-        $escaped = $this->escapeLucene($query);
+        $type = strtolower(trim($type));
+        return array_key_exists($type, self::SEARCH_TYPES) ? $type : self::DEFAULT_TYPE;
+    }
 
-        $parts = [
-            sprintf('(releasegroup:%s^4 OR artist:%s^3 OR releasegroup:(%s) OR artist:(%s))', $phrase, $phrase, $escaped, $escaped),
-            '(primarytype:album OR primarytype:ep)',
-            'NOT secondarytype:compilation',
-            'NOT secondarytype:live',
-            'NOT secondarytype:remix',
-            'NOT secondarytype:soundtrack',
-            'NOT secondarytype:dj-mix',
-            'NOT secondarytype:interview',
-            'NOT secondarytype:demo',
-            'NOT artist:"Various Artists"',
-        ];
+    /**
+     * @return array{label: string, placeholder: string, primary: list<string>, secondary: string|null, exclude_secondary: list<string>}
+     */
+    private function typeConfig(string $type): array
+    {
+        return self::SEARCH_TYPES[$this->normalizeType($type)];
+    }
+
+    private function buildLuceneQuery(string $titleQuery, string $artistQuery, string $type): string
+    {
+        $config = $this->typeConfig($type);
+        $parts = [];
+
+        if ($titleQuery !== '') {
+            $titlePhrase = $this->quotePhrase($titleQuery);
+            $titleEscaped = $this->escapeLucene($titleQuery);
+            $parts[] = sprintf('(releasegroup:%s^4 OR releasegroup:(%s))', $titlePhrase, $titleEscaped);
+        }
+
+        if ($artistQuery !== '') {
+            $artistPhrase = $this->quotePhrase($artistQuery);
+            $artistEscaped = $this->escapeLucene($artistQuery);
+            $parts[] = sprintf('(artist:%s^4 OR artist:(%s))', $artistPhrase, $artistEscaped);
+        }
+
+        if (is_array($config['primary']) && $config['primary'] !== []) {
+            $primaryClauses = array_map(
+                static fn(string $primary): string => 'primarytype:' . strtolower($primary),
+                $config['primary']
+            );
+            $parts[] = '(' . implode(' OR ', $primaryClauses) . ')';
+        }
+
+        if (is_string($config['secondary']) && $config['secondary'] !== '') {
+            $parts[] = 'secondarytype:' . strtolower($config['secondary']);
+        }
+
+        foreach ($config['exclude_secondary'] as $excluded) {
+            $parts[] = 'NOT secondarytype:' . strtolower($excluded);
+        }
+
+        // Compilations often use Various Artists — keep them for that category only.
+        if ($type !== 'compilation') {
+            $parts[] = 'NOT artist:"Various Artists"';
+        }
 
         return implode(' AND ', $parts);
     }
@@ -117,7 +200,7 @@ final class MusicBrainzService
      *   cover_url: string
      * }|null
      */
-    private function mapReleaseGroup(array $row, string $query): ?array
+    private function mapReleaseGroup(array $row, string $titleQuery, string $artistQuery, string $type): ?array
     {
         $score = isset($row['score']) ? (int) $row['score'] : 0;
         if ($score < self::MIN_SCORE) {
@@ -134,25 +217,39 @@ final class MusicBrainzService
             return null;
         }
 
-        if (!in_array($primaryType, ['Album', 'EP'], true)) {
+        $config = $this->typeConfig($type);
+        if (is_array($config['primary']) && $config['primary'] !== [] && !in_array($primaryType, $config['primary'], true)) {
             return null;
         }
 
-        $secondaryTypes = $row['secondary-types'] ?? [];
-        if (is_array($secondaryTypes)) {
-            foreach ($secondaryTypes as $secondaryType) {
-                if (is_string($secondaryType) && in_array($secondaryType, self::BLOCKED_SECONDARY_TYPES, true)) {
-                    return null;
+        $secondaryTypes = [];
+        $rawSecondary = $row['secondary-types'] ?? [];
+        if (is_array($rawSecondary)) {
+            foreach ($rawSecondary as $secondaryType) {
+                if (is_string($secondaryType) && $secondaryType !== '') {
+                    $secondaryTypes[] = $secondaryType;
                 }
             }
         }
 
+        if (is_string($config['secondary']) && $config['secondary'] !== '') {
+            if (!in_array($config['secondary'], $secondaryTypes, true)) {
+                return null;
+            }
+        }
+
+        foreach ($config['exclude_secondary'] as $excluded) {
+            if (in_array($excluded, $secondaryTypes, true)) {
+                return null;
+            }
+        }
+
         $artist = $this->extractArtistCredit($row);
-        if ($this->isVariousArtist($artist)) {
+        if ($type !== 'compilation' && $this->isVariousArtist($artist)) {
             return null;
         }
 
-        if (!$this->matchesQuery($title, $artist, $query)) {
+        if (!$this->matchesQuery($title, $artist, $titleQuery, $artistQuery)) {
             return null;
         }
 
@@ -166,28 +263,33 @@ final class MusicBrainzService
             'artist' => $artist,
             'primary_type' => $primaryType,
             'first_release_date' => $date !== '' ? $date : null,
-            'cover_url' => sprintf(self::COVER_ART_FRONT, rawurlencode($mbid)),
+            'cover_url' => CoverArtService::proxyUrl($mbid),
         ];
     }
 
-    private function matchesQuery(string $title, string $artist, string $query): bool
+    private function matchesQuery(string $title, string $artist, string $titleQuery, string $artistQuery): bool
     {
-        $needle = $this->normalize($query);
-        if ($needle === '') {
-            return false;
-        }
-
         $normalizedTitle = $this->normalize($title);
         $normalizedArtist = $this->normalize($artist);
 
-        if (
-            $normalizedTitle === $needle
-            || $normalizedArtist === $needle
-            || str_starts_with($normalizedTitle, $needle)
-            || str_starts_with($normalizedArtist, $needle)
-            || str_contains($normalizedTitle, $needle)
-            || str_contains($normalizedArtist, $needle)
-        ) {
+        if ($titleQuery !== '' && !$this->valueMatchesNeedle($normalizedTitle, $this->normalize($titleQuery))) {
+            return false;
+        }
+
+        if ($artistQuery !== '' && !$this->valueMatchesNeedle($normalizedArtist, $this->normalize($artistQuery))) {
+            return false;
+        }
+
+        return $titleQuery !== '' || $artistQuery !== '';
+    }
+
+    private function valueMatchesNeedle(string $value, string $needle): bool
+    {
+        if ($needle === '') {
+            return true;
+        }
+
+        if (str_contains($value, $needle)) {
             return true;
         }
 
@@ -197,9 +299,8 @@ final class MusicBrainzService
             return false;
         }
 
-        $haystack = $normalizedTitle . ' ' . $normalizedArtist;
         foreach ($tokens as $token) {
-            if (!str_contains($haystack, $token)) {
+            if (!str_contains($value, $token)) {
                 return false;
             }
         }

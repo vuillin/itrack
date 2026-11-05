@@ -3,24 +3,57 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/src/Icon.php';
+require_once dirname(__DIR__) . '/src/MusicBrainzService.php';
 ?>
 <section id="view-rechercher" class="view-section hidden">
     <h1 class="page-title">Rechercher</h1>
 
-    <form id="search-form" class="search-bar" role="search" action="#" method="get">
-        <label class="search-bar__label" for="search-input">
-            <span class="search-bar__icon" aria-hidden="true"><?= Icon::render('search') ?></span>
-            <span class="visually-hidden">Rechercher</span>
+    <form id="search-form" class="search-toolbar" role="search">
+        <div class="search-bar search-bar--title">
+            <label class="search-bar__label" for="search-input">
+                <span class="search-bar__icon" aria-hidden="true"><?= Icon::render('search') ?></span>
+                <span class="visually-hidden"><?= htmlspecialchars(MusicBrainzService::SEARCH_TYPES[MusicBrainzService::DEFAULT_TYPE]['placeholder'], ENT_QUOTES, 'UTF-8') ?></span>
+            </label>
+            <input
+                id="search-input"
+                class="search-bar__input"
+                type="search"
+                placeholder="<?= htmlspecialchars(MusicBrainzService::SEARCH_TYPES[MusicBrainzService::DEFAULT_TYPE]['placeholder'], ENT_QUOTES, 'UTF-8') ?>"
+                autocomplete="off"
+                spellcheck="false"
+            >
+        </div>
+
+        <div class="search-bar search-bar--artist">
+            <label class="search-bar__label" for="search-artist">
+                <span class="visually-hidden">Artiste</span>
+            </label>
+            <input
+                id="search-artist"
+                class="search-bar__input"
+                type="search"
+                placeholder="Artiste"
+                autocomplete="off"
+                spellcheck="false"
+            >
+        </div>
+
+        <label class="search-type" for="search-type">
+            <span class="visually-hidden">Catégorie</span>
+            <select id="search-type" class="search-type__select">
+                <?php foreach (MusicBrainzService::SEARCH_TYPES as $value => $config): ?>
+                    <option
+                        value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"
+                        data-placeholder="<?= htmlspecialchars($config['placeholder'], ENT_QUOTES, 'UTF-8') ?>"
+                        <?= $value === MusicBrainzService::DEFAULT_TYPE ? ' selected' : '' ?>
+                    >
+                        <?= htmlspecialchars($config['label'], ENT_QUOTES, 'UTF-8') ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
         </label>
-        <input
-            id="search-input"
-            class="search-bar__input"
-            type="search"
-            name="q"
-            placeholder="iTrack"
-            autocomplete="off"
-            spellcheck="false"
-        >
+
+        <button type="submit" class="search-submit">Rechercher</button>
     </form>
 
     <div id="search-results" class="search-results" hidden>
@@ -42,7 +75,7 @@ require_once dirname(__DIR__) . '/src/Icon.php';
         >
             <h2 id="search-mb-title" class="albums-row__title">Albums</h2>
             <p id="search-mb-status" class="search-row-status" hidden></p>
-            <ul id="search-mb-row" class="albums-row" aria-label="Albums MusicBrainz"></ul>
+            <ul id="search-mb-row" class="albums-row" aria-label="Résultats MusicBrainz"></ul>
         </section>
     </div>
 </section>

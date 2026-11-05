@@ -4,7 +4,7 @@ export function clearElement(el) {
     }
 }
 
-export function normalizeSearchText(value) {
+function normalizeSearchText(value) {
     return String(value || '')
         .toLowerCase()
         .normalize('NFD')
@@ -12,12 +12,22 @@ export function normalizeSearchText(value) {
         .trim();
 }
 
+function fieldMatchScore(value, needle, { exact = 100, prefix = 80, includes = 50 } = {}) {
+    if (!needle) return 0;
+    if (value === needle) return exact;
+    if (value.startsWith(needle)) return prefix;
+    if (value.includes(needle)) return includes;
+    return 0;
+}
+
 /**
  * Higher score = closer match. 0 = no match.
+ * Pass album title query and/or artist query.
  */
-export function albumSearchScore(album, query) {
-    const needle = normalizeSearchText(query);
-    if (!needle) {
+export function albumSearchScore(album, titleQuery = '', artistQuery = '') {
+    const titleNeedle = normalizeSearchText(titleQuery);
+    const artistNeedle = normalizeSearchText(artistQuery);
+    if (!titleNeedle && !artistNeedle) {
         return 0;
     }
 
@@ -25,23 +35,20 @@ export function albumSearchScore(album, query) {
     const artist = normalizeSearchText(album?.artist);
     let score = 0;
 
-    if (title === needle) score += 100;
-    else if (title.startsWith(needle)) score += 80;
-    else if (title.includes(needle)) score += 50;
-
-    if (artist === needle) score += 40;
-    else if (artist.startsWith(needle)) score += 30;
-    else if (artist.includes(needle)) score += 20;
-
-    if (score === 0) {
-        const tokens = needle.split(/\s+/).filter(Boolean);
-        if (tokens.length > 1) {
-            const haystack = `${title} ${artist}`;
-            const allMatch = tokens.every((token) => haystack.includes(token));
-            if (allMatch) {
-                score = 15;
-            }
+    if (titleNeedle) {
+        const titleScore = fieldMatchScore(title, titleNeedle);
+        if (titleScore === 0) {
+            return 0;
         }
+        score += titleScore;
+    }
+
+    if (artistNeedle) {
+        const artistScore = fieldMatchScore(artist, artistNeedle);
+        if (artistScore === 0) {
+            return 0;
+        }
+        score += artistScore;
     }
 
     return score;

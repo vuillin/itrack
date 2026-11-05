@@ -1,0 +1,4 @@
+.env
+albums.sqlite
+logs/app.log
+cache/

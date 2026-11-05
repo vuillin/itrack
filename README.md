@@ -33,6 +33,7 @@ GET is public.
 | `components/` | PHP partials |
 | `views/` | Page sections |
 | `albums.sqlite` | Your library (local, not committed) |
+| `cache/covers/` | Cached MusicBrainz cover art (local, not committed) |
 | `docs/api.md` | API reference |
 | `logs/` | App error log (`app.log`) |
 
