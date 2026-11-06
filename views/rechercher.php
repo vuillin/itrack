@@ -77,5 +77,15 @@ require_once dirname(__DIR__) . '/src/MusicBrainzService.php';
             <p id="search-mb-status" class="search-row-status" hidden></p>
             <ul id="search-mb-row" class="albums-row" aria-label="Résultats MusicBrainz"></ul>
         </section>
+
+        <section
+            id="search-listened-section"
+            class="albums-row-section"
+            aria-labelledby="search-listened-title"
+            hidden
+        >
+            <h2 id="search-listened-title" class="albums-row__title">Mes écoutes</h2>
+            <ul id="search-listened-row" class="albums-row" aria-label="Albums de mes écoutes"></ul>
+        </section>
     </div>
 </section>

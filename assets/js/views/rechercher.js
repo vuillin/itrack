@@ -1,7 +1,7 @@
 import { searchMusicBrainzAlbums } from '../api/client.js';
 import { openAlbumModal } from '../components/album-modal.js';
 import { getAlbums } from '../state.js';
-import { albumCoverUrl, albumSearchScore, clearElement } from '../utils/dom.js';
+import { albumCoverUrl, albumSearchScore, clearElement, hasBeenListened, isOwned } from '../utils/dom.js';
 
 const MAX_LOCAL_RESULTS = 25;
 
@@ -83,14 +83,14 @@ function createEmptyCover() {
     return placeholder;
 }
 
-function createAlbumCard(album, { remote = false } = {}) {
+function createAlbumCard(album, { remote = false, showActions = true } = {}) {
     const li = document.createElement('li');
     li.className = 'album-card album-card--action';
     li.tabIndex = 0;
     li.setAttribute('role', 'button');
     li.setAttribute('aria-label', `${album.title || 'Album'} — ${album.artist || 'Artiste inconnu'}`);
 
-    const open = () => openAlbumModal(album, { remote });
+    const open = () => openAlbumModal(album, { remote, showActions });
     li.addEventListener('click', open);
     li.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -130,17 +130,18 @@ function createAlbumCard(album, { remote = false } = {}) {
 
 function syncResultsVisibility() {
     const results = document.getElementById('search-results');
+    const listenedSection = document.getElementById('search-listened-section');
     const collectionSection = document.getElementById('search-collection-section');
     const mbSection = document.getElementById('search-mb-section');
-    if (!results || !collectionSection || !mbSection) return;
+    if (!results || !listenedSection || !collectionSection || !mbSection) return;
 
-    const hasSomething = !collectionSection.hidden || !mbSection.hidden;
+    const hasSomething = !listenedSection.hidden || !collectionSection.hidden || !mbSection.hidden;
     results.hidden = !hasSomething;
 }
 
-function renderLocalCollection(albums) {
-    const section = document.getElementById('search-collection-section');
-    const row = document.getElementById('search-collection-row');
+function renderLocalRow(sectionId, rowId, albums, { fromListens = false } = {}) {
+    const section = document.getElementById(sectionId);
+    const row = document.getElementById(rowId);
     if (!section || !row) return;
 
     clearElement(row);
@@ -152,10 +153,21 @@ function renderLocalCollection(albums) {
     }
 
     albums.forEach((album) => {
-        row.appendChild(createAlbumCard(album, { remote: false }));
+        row.appendChild(createAlbumCard(album, {
+            remote: false,
+            showActions: !fromListens,
+        }));
     });
     section.hidden = false;
     syncResultsVisibility();
+}
+
+function renderLocalCollection(albums) {
+    const listened = albums.filter((album) => hasBeenListened(album));
+    const collection = albums.filter((album) => isOwned(album));
+
+    renderLocalRow('search-listened-section', 'search-listened-row', listened, { fromListens: true });
+    renderLocalRow('search-collection-section', 'search-collection-row', collection, { fromListens: false });
 }
 
 function setMbStatus(message, { error = false } = {}) {

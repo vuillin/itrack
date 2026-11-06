@@ -147,7 +147,8 @@ ul {
 
 .app-container {
     margin-left: var(--sidebar-w);
-    max-width: var(--content-max);
+    width: calc(100% - var(--sidebar-w));
+    max-width: none;
     padding: 1.75rem var(--content-pad-x) 2.5rem;
 }
 
@@ -341,9 +342,7 @@ ul {
 
 .albums-row {
     --album-card-size: 180px;
-    --row-bleed-right: calc(
-        var(--content-pad-x) + max(0px, 100vw - var(--sidebar-w) - var(--content-max))
-    );
+    --row-bleed-right: var(--content-pad-x);
     display: flex;
     flex-wrap: nowrap;
     gap: 1.15rem;
@@ -451,9 +450,24 @@ ul {
 
 .albums-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 1.25rem;
     margin-top: 1.75rem;
+}
+
+.albums-grid .album-card {
+    min-width: 0;
+}
+
+.albums-grid .album-card__title,
+.albums-grid .album-card__artist {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.albums-grid .album-card__artist {
+    margin-top: -0.6rem;
 }
 
 .albums-grid__empty {

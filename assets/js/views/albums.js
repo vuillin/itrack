@@ -59,13 +59,6 @@ function createAlbumCard(album) {
     artist.textContent = album.artist || 'Artiste inconnu';
     li.appendChild(artist);
 
-    if (album.release_year) {
-        const year = document.createElement('p');
-        year.className = 'album-card__year';
-        year.textContent = String(album.release_year);
-        li.appendChild(year);
-    }
-
     return li;
 }
 
