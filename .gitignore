@@ -2,3 +2,5 @@
 albums.sqlite
 logs/app.log
 cache/
+assets/images/covers/*
+!assets/images/covers/.gitkeep

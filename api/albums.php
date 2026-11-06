@@ -39,10 +39,28 @@ function albums_handlers(PDO $pdo): callable
 
                 if ($isListen) {
                     $payload = array_merge($data, $formats);
-                    $payload['cover'] = $cover;
                     $payload['mbid'] = $mbid;
                     $payload['title'] = trim((string) $data['title']);
                     $payload['last_listened_at'] = trim((string) $data['last_listened_at']);
+
+                    if ($mbid !== null) {
+                        $coverService = CoverArtService::fromProjectRoot();
+                        if ($cover !== null && !$coverService->libraryCoverExists($cover)) {
+                            $cover = null;
+                        }
+                        if ($cover === null) {
+                            $existing = $repo->findByMbid($mbid);
+                            $existingCover = is_array($existing) && isset($existing['cover']) && is_string($existing['cover'])
+                                ? AlbumRepository::normalizeCoverFilename($existing['cover'])
+                                : null;
+                            if ($existingCover !== null && $coverService->libraryCoverExists($existingCover)) {
+                                $cover = $existingCover;
+                            } else {
+                                $cover = $coverService->persistLibraryCover($mbid);
+                            }
+                        }
+                    }
+                    $payload['cover'] = $cover;
 
                     if (isset($data['overview']) && is_string($data['overview'])) {
                         $payload['overview'] = trim($data['overview']);
@@ -108,6 +126,14 @@ function albums_handlers(PDO $pdo): callable
 
                 if (!empty($data['unlisten'])) {
                     $result = $repo->unlisten($id);
+                    if (
+                        !empty($result['deleted'])
+                        && isset($result['deleted_cover'])
+                        && is_string($result['deleted_cover'])
+                        && $result['deleted_cover'] !== ''
+                    ) {
+                        CoverArtService::fromProjectRoot()->deleteLibraryCover($result['deleted_cover']);
+                    }
                     JsonResponse::send([
                         'success' => 'Retiré des écoutes',
                         'deleted' => $result['deleted'],

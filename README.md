@@ -22,7 +22,8 @@ On first run, `albums.sqlite` is created automatically from `schema.sql`.
 | `components/` | PHP partials |
 | `views/` | Page sections |
 | `albums.sqlite` | Your library (local, not committed) |
-| `cache/covers/` | Cached MusicBrainz cover art (local, not committed) |
+| `cache/covers/` | Temporary CAA cache for search previews (local, not committed) |
+| `assets/images/covers/` | Permanent library covers (local, not committed) |
 | `docs/api.md` | API reference |
 | `logs/` | App error log (`app.log`) |
 
@@ -35,8 +36,8 @@ On first run, `albums.sqlite` is created automatically from `schema.sql`.
 
 ## Covers
 
-Filenames in the DB, files on disk in `assets/images/covers/`.  
-Store as `.webp`. In the DB, keep just the filename (`ok_computer.webp`).
+- **Search / preview** — proxied via `api.php?mb_cover={mbid}` (`cache/covers/`).
+- **Library (écoutes / collection)** — downloaded once into `assets/images/covers/`, filename stored in `albums.cover` (e.g. `{mbid}.jpg`).
 
 ## API
 

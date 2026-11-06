@@ -7,15 +7,21 @@ final class CoverArtService
     private const USER_AGENT = 'iTrack/0.1 (personal music library; local)';
     private const CAA_FRONT = 'https://coverartarchive.org/release-group/%s/front-250';
     private const NEGATIVE_TTL_SECONDS = 86400;
+    private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
 
-    public function __construct(private string $cacheDir)
-    {
+    public function __construct(
+        private string $cacheDir,
+        private string $libraryDir,
+    ) {
     }
 
     public static function fromProjectRoot(?string $projectRoot = null): self
     {
         $root = $projectRoot ?? dirname(__DIR__);
-        return new self($root . '/cache/covers');
+        return new self(
+            $root . '/cache/covers',
+            $root . '/assets/images/covers',
+        );
     }
 
     public static function isValidMbid(string $mbid): bool
@@ -32,7 +38,7 @@ final class CoverArtService
     }
 
     /**
-     * Stream a cached (or freshly fetched) cover to the client.
+     * Stream a cached (or freshly fetched) cover to the client (search / preview).
      */
     public function respond(string $mbid): void
     {
@@ -44,7 +50,7 @@ final class CoverArtService
             exit;
         }
 
-        $path = $this->ensureCoverFile($mbid);
+        $path = $this->ensureCacheFile($mbid);
         if ($path === null) {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');
@@ -61,12 +67,94 @@ final class CoverArtService
         exit;
     }
 
-    private function ensureCoverFile(string $mbid): ?string
+    /**
+     * Download (or reuse cache) into the library folder and return the DB filename.
+     */
+    public function persistLibraryCover(string $mbid): ?string
     {
-        $this->ensureCacheDir();
+        $mbid = strtolower(trim($mbid));
+        if (!self::isValidMbid($mbid)) {
+            return null;
+        }
 
-        foreach (['jpg', 'jpeg', 'png', 'webp', 'gif'] as $extension) {
-            $imagePath = $this->imagePath($mbid, $extension);
+        $existing = $this->findLibraryCoverFilename($mbid);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $sourcePath = $this->ensureCacheFile($mbid);
+        if ($sourcePath === null) {
+            return null;
+        }
+
+        $this->ensureDir($this->libraryDir);
+
+        $extension = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
+        if ($extension === '' || !in_array($extension, self::IMAGE_EXTENSIONS, true)) {
+            $extension = 'jpg';
+        }
+
+        $filename = $mbid . '.' . $extension;
+        $destination = $this->libraryPath($filename);
+        if (!@copy($sourcePath, $destination)) {
+            Logger::error('Impossible de copier la pochette library ' . $mbid);
+            return null;
+        }
+
+        return $filename;
+    }
+
+    public function libraryCoverExists(?string $filename): bool
+    {
+        if ($filename === null) {
+            return false;
+        }
+
+        $filename = basename(trim($filename));
+        if ($filename === '' || str_contains($filename, '..')) {
+            return false;
+        }
+
+        $path = $this->libraryPath($filename);
+        return is_file($path) && filesize($path) > 0;
+    }
+
+    public function deleteLibraryCover(?string $filename): void
+    {
+        if ($filename === null) {
+            return;
+        }
+
+        $filename = basename(trim($filename));
+        if ($filename === '' || str_contains($filename, '..')) {
+            return;
+        }
+
+        $path = $this->libraryPath($filename);
+        if (is_file($path)) {
+            @unlink($path);
+        }
+    }
+
+    private function findLibraryCoverFilename(string $mbid): ?string
+    {
+        foreach (self::IMAGE_EXTENSIONS as $extension) {
+            $filename = $mbid . '.' . $extension;
+            $path = $this->libraryPath($filename);
+            if (is_file($path) && filesize($path) > 0) {
+                return $filename;
+            }
+        }
+
+        return null;
+    }
+
+    private function ensureCacheFile(string $mbid): ?string
+    {
+        $this->ensureDir($this->cacheDir);
+
+        foreach (self::IMAGE_EXTENSIONS as $extension) {
+            $imagePath = $this->cachePath($mbid, $extension);
             if (is_file($imagePath) && filesize($imagePath) > 0) {
                 return $imagePath;
             }
@@ -87,7 +175,7 @@ final class CoverArtService
             return null;
         }
 
-        $targetPath = $this->imagePath($mbid, $binary['extension']);
+        $targetPath = $this->cachePath($mbid, $binary['extension']);
         $written = @file_put_contents($targetPath, $binary['body']);
         if ($written === false) {
             Logger::error('Impossible d\'écrire le cache pochette ' . $mbid);
@@ -150,20 +238,25 @@ final class CoverArtService
         ];
     }
 
-    private function ensureCacheDir(): void
+    private function ensureDir(string $dir): void
     {
-        if (is_dir($this->cacheDir)) {
+        if (is_dir($dir)) {
             return;
         }
 
-        if (!mkdir($this->cacheDir, 0775, true) && !is_dir($this->cacheDir)) {
-            throw new RuntimeException('Impossible de créer le dossier cache/covers');
+        if (!mkdir($dir, 0775, true) && !is_dir($dir)) {
+            throw new RuntimeException('Impossible de créer le dossier ' . $dir);
         }
     }
 
-    private function imagePath(string $mbid, string $extension = 'jpg'): string
+    private function cachePath(string $mbid, string $extension = 'jpg'): string
     {
         return $this->cacheDir . '/' . $mbid . '.' . $extension;
+    }
+
+    private function libraryPath(string $filename): string
+    {
+        return $this->libraryDir . '/' . $filename;
     }
 
     private function missingPath(string $mbid): string

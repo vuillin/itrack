@@ -67,17 +67,16 @@ final class AlbumRepository
             return null;
         }
 
-        $value = trim($cover);
-        if ($value === '') {
+        $value = basename(trim($cover));
+        if ($value === '' || $value === '.' || $value === '..') {
             return null;
         }
 
-        if (!str_ends_with(strtolower($value), '.webp')) {
-            $value = preg_replace('/\.(png|jpe?g)$/i', '', $value) ?? $value;
-            $value .= '.webp';
+        if (preg_match('/\.(webp|png|jpe?g|gif)$/i', $value)) {
+            return $value;
         }
 
-        return $value;
+        return $value . '.webp';
     }
 
     /**
@@ -180,7 +179,7 @@ final class AlbumRepository
      * Remove from listens. Deletes the row if it has no physical formats,
      * otherwise only clears last_listened_at.
      *
-     * @return array{deleted: bool, album: ?array<string, mixed>}
+     * @return array{deleted: bool, album: ?array<string, mixed>, deleted_cover: ?string}
      */
     public function unlisten(int $id): array
     {
@@ -200,13 +199,19 @@ final class AlbumRepository
             return [
                 'deleted' => false,
                 'album' => $this->findById($id),
+                'deleted_cover' => null,
             ];
         }
+
+        $cover = isset($existing['cover']) && is_string($existing['cover']) && $existing['cover'] !== ''
+            ? $existing['cover']
+            : null;
 
         $this->delete($id);
         return [
             'deleted' => true,
             'album' => null,
+            'deleted_cover' => $cover,
         ];
     }
 

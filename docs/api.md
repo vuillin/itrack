@@ -32,9 +32,9 @@ Create an album.
 }
 ```
 
-`title` is required. Cover filenames are normalized to `.webp`.
+`title` is required. Cover filenames keep a real image extension (`.jpg`, `.png`, `.webp`, …).
 
-If `last_listened_at` is set, the album is upserted by `mbid` (create or refresh) and the full snapshot is stored (`overview`, `tracks`, genres, rating MB, etc.). Response includes the saved `album`.
+If `last_listened_at` is set, the album is upserted by `mbid` (create or refresh) and the full snapshot is stored (`overview`, `tracks`, genres, rating MB, cover file, etc.). Missing covers are downloaded into `assets/images/covers/` and saved on `albums.cover`. Response includes the saved `album`.
 
 ### `PUT api.php`
 
@@ -125,5 +125,6 @@ Tracklist comes from a representative official release of the release-group (ext
 
 ### `GET api.php?mb_cover={mbid}`
 
-Proxy + cache local for Cover Art Archive front thumbnails (`cache/covers/`).  
+Proxy + temporary cache for Cover Art Archive front thumbnails (`cache/covers/`), used by search previews.  
+Library albums should use `assets/images/covers/{cover}` instead.  
 Returns the image bytes, or `404` when no cover exists.
