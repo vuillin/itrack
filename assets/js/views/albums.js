@@ -10,6 +10,31 @@ const sortDirs = {
     year: 'desc',
 };
 let sortInitialized = false;
+let searchInitialized = false;
+
+function normalizeQuery(value) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+}
+
+function getListensQuery() {
+    const input = document.getElementById('listens-search-input');
+    return input instanceof HTMLInputElement ? normalizeQuery(input.value) : '';
+}
+
+function albumMatchesQuery(album, query) {
+    if (!query) return true;
+    const year = albumYear(album);
+    const haystack = normalizeQuery([
+        album?.title,
+        album?.artist,
+        year != null ? String(year) : '',
+    ].join(' '));
+    return haystack.includes(query);
+}
 
 function compareText(a, b) {
     return String(a || '').localeCompare(String(b || ''), 'fr', { sensitivity: 'base' });
@@ -308,25 +333,48 @@ function initListensSort() {
     });
 }
 
+function initListensSearch() {
+    if (searchInitialized) return;
+    const input = document.getElementById('listens-search-input');
+    if (!(input instanceof HTMLInputElement)) return;
+
+    searchInitialized = true;
+    input.addEventListener('input', () => {
+        renderListenedAlbums();
+    });
+}
+
+function renderEmptyState(message) {
+    const grid = document.createElement('ul');
+    grid.className = 'albums-grid';
+    grid.setAttribute('aria-label', 'Albums écoutés');
+    const empty = document.createElement('li');
+    empty.className = 'albums-grid__empty';
+    empty.textContent = message;
+    grid.appendChild(empty);
+    return grid;
+}
+
 export function renderListenedAlbums() {
     const root = document.getElementById('albums-listened-root');
     if (!root) return;
 
+    initListensSearch();
     initListensSort();
     syncSortButtons();
     clearElement(root);
 
-    const listened = getAlbums().filter((album) => hasBeenListened(album));
+    const query = getListensQuery();
+    const listened = getAlbums()
+        .filter((album) => hasBeenListened(album))
+        .filter((album) => albumMatchesQuery(album, query));
 
     if (!listened.length) {
-        const grid = document.createElement('ul');
-        grid.className = 'albums-grid';
-        grid.setAttribute('aria-label', 'Albums écoutés');
-        const empty = document.createElement('li');
-        empty.className = 'albums-grid__empty';
-        empty.textContent = 'Aucun album écouté pour le moment.';
-        grid.appendChild(empty);
-        root.appendChild(grid);
+        root.appendChild(renderEmptyState(
+            query
+                ? 'Aucun album ne correspond à ta recherche.'
+                : 'Aucun album écouté pour le moment.',
+        ));
         return;
     }
 

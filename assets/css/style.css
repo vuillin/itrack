@@ -448,11 +448,24 @@ ul {
     font-size: 0.85rem;
 }
 
+.listens-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    margin-top: 1.25rem;
+}
+
+.listens-search {
+    flex: 1 1 12rem;
+    max-width: 18rem;
+    margin: 0;
+}
+
 .listens-sort {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-    margin-top: 1.25rem;
 }
 
 .listens-sort__btn {
