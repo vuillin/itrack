@@ -123,6 +123,15 @@ Lookup a release-group by MBID (detail sheet).
 `description` comes from Wikipedia/Wikidata (via MusicBrainz url-rels), falling back to the MB annotation.  
 Tracklist comes from a representative official release of the release-group (extra MusicBrainz call).
 
+### `POST api.php?album_cover=1`
+
+Replace a library album cover. Multipart form:
+
+- `id` — album id
+- `cover` — image file (jpg / png / webp / gif, max 5 Mo)
+
+Saves as `assets/images/covers/album-{id}.{ext}` and updates `albums.cover`.
+
 ### `GET api.php?mb_cover={mbid}`
 
 Proxy + temporary cache for Cover Art Archive front thumbnails (`cache/covers/`), used by search previews.  

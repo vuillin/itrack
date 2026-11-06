@@ -62,13 +62,16 @@ export function setEmptyListMessage(listEl, message) {
     listEl.appendChild(li);
 }
 
-export function coverUrl(cover) {
-    return cover ? `assets/images/covers/${cover}` : '';
+export function coverUrl(cover, coverVersion = null) {
+    if (!cover) return '';
+    const base = `assets/images/covers/${cover}`;
+    if (coverVersion == null || coverVersion === '') return base;
+    return `${base}?v=${encodeURIComponent(String(coverVersion))}`;
 }
 
 export function albumCoverUrl(album) {
     if (!album || typeof album !== 'object') return '';
-    if (album.cover) return coverUrl(album.cover);
+    if (album.cover) return coverUrl(album.cover, album.cover_v);
     if (typeof album.mbid === 'string' && album.mbid) {
         return `api.php?mb_cover=${encodeURIComponent(album.mbid)}`;
     }

@@ -14,9 +14,16 @@ require_once dirname(__DIR__) . '/src/Http/JsonResponse.php';
 require_once dirname(__DIR__) . '/src/Http/Request.php';
 require_once dirname(__DIR__) . '/src/Http/Input.php';
 require_once __DIR__ . '/albums.php';
+require_once __DIR__ . '/album_cover_upload.php';
 require_once __DIR__ . '/musicbrainz_search.php';
 require_once __DIR__ . '/musicbrainz_release_group.php';
 require_once __DIR__ . '/musicbrainz_cover.php';
+
+if (isset($_GET['album_cover'])) {
+    $handle = album_cover_upload_handler($pdo);
+    $handle();
+    exit;
+}
 
 if (isset($_GET['mb_cover'])) {
     $handle = musicbrainz_cover_handler();

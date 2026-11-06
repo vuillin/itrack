@@ -136,6 +136,73 @@ final class CoverArtService
         }
     }
 
+    /**
+     * Store a user-uploaded image into the library covers folder.
+     * Does not delete the previous cover — caller handles cleanup after DB update.
+     *
+     * @param array{tmp_name?: string, name?: string, size?: int, error?: int, type?: string} $uploadedFile
+     */
+    public function storeUploadedLibraryCover(array $uploadedFile, string $basenameWithoutExt): string
+    {
+        $error = isset($uploadedFile['error']) ? (int) $uploadedFile['error'] : UPLOAD_ERR_NO_FILE;
+        if ($error !== UPLOAD_ERR_OK) {
+            throw new InvalidArgumentException('Échec de l\'upload de la pochette');
+        }
+
+        $tmpName = isset($uploadedFile['tmp_name']) && is_string($uploadedFile['tmp_name'])
+            ? $uploadedFile['tmp_name']
+            : '';
+        $size = isset($uploadedFile['size']) ? (int) $uploadedFile['size'] : 0;
+
+        if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+            throw new InvalidArgumentException('Fichier upload invalide');
+        }
+
+        if ($size <= 0 || $size > 5 * 1024 * 1024) {
+            throw new InvalidArgumentException('Pochette trop volumineuse (max 5 Mo)');
+        }
+
+        $mime = $this->detectUploadMime($tmpName);
+        $extension = $this->extensionFromMime($mime ?? '');
+        if ($extension === null) {
+            throw new InvalidArgumentException('Format d\'image non supporté');
+        }
+
+        $basename = strtolower(trim($basenameWithoutExt));
+        $basename = preg_replace('/[^a-z0-9_-]+/', '-', $basename) ?? 'album';
+        $basename = trim($basename, '-_');
+        if ($basename === '') {
+            $basename = 'album';
+        }
+
+        $this->ensureDir($this->libraryDir);
+
+        $filename = $basename . '.' . $extension;
+        $destination = $this->libraryPath($filename);
+
+        if (!@move_uploaded_file($tmpName, $destination)) {
+            throw new RuntimeException('Impossible d\'enregistrer la pochette');
+        }
+
+        return $filename;
+    }
+
+    private function detectUploadMime(string $path): ?string
+    {
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $mime = finfo_file($finfo, $path);
+                finfo_close($finfo);
+                if (is_string($mime) && str_starts_with($mime, 'image/')) {
+                    return $mime;
+                }
+            }
+        }
+
+        return $this->detectMime($path);
+    }
+
     private function findLibraryCoverFilename(string $mbid): ?string
     {
         foreach (self::IMAGE_EXTENSIONS as $extension) {

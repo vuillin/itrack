@@ -1,4 +1,9 @@
-import { fetchMusicBrainzReleaseGroup, markAlbumListened, unlistenAlbum } from '../api/client.js';
+import {
+    fetchMusicBrainzReleaseGroup,
+    markAlbumListened,
+    unlistenAlbum,
+    uploadAlbumCover,
+} from '../api/client.js';
 import { removeAlbum, upsertAlbum } from '../state.js';
 import { albumCoverUrl } from '../utils/dom.js';
 import { toastError, toastSuccess } from './toast.js';
@@ -18,6 +23,13 @@ let listenBusy = false;
 let manageListens = false;
 let unlistenStep = 0;
 let unlistenBusy = false;
+let coverUploadBusy = false;
+
+const EDIT_COVER_ICON = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.5-2.5a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.999-1.66z"/>
+</svg>
+`;
 
 function yearFromDate(value) {
     if (typeof value !== 'string' || value === '') return '';
@@ -61,6 +73,8 @@ function normalizeSeed(seed = {}, { remote = false } = {}) {
         genres,
         rating: seed.rating && typeof seed.rating === 'object' ? seed.rating : null,
         description: seed.description || seed.annotation || seed.overview || null,
+        cover: typeof seed.cover === 'string' ? seed.cover : '',
+        cover_v: seed.cover_v != null ? Number(seed.cover_v) : null,
         cover_url: albumCoverUrl(seed),
         tracks,
         last_listened_at: seed.last_listened_at || null,
@@ -338,7 +352,7 @@ function ensureModal() {
     document.body.appendChild(overlay);
 }
 
-function renderCover(album) {
+function renderCoverMedia(album) {
     if (album.cover_url) {
         const img = document.createElement('img');
         img.className = 'album-modal__cover';
@@ -365,6 +379,82 @@ function renderEmptyCover() {
     placeholder.appendChild(logo);
 
     return placeholder;
+}
+
+function renderCover(album) {
+    const media = renderCoverMedia(album);
+    if (!manageListens || !album.id) {
+        return media;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'album-modal__cover-wrap';
+    if (coverUploadBusy) {
+        wrap.classList.add('is-busy');
+    }
+
+    wrap.appendChild(media);
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'album-modal__cover-edit';
+    edit.setAttribute('aria-label', 'Remplacer la pochette');
+    edit.disabled = coverUploadBusy;
+    edit.innerHTML = EDIT_COVER_ICON;
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.className = 'album-modal__cover-input';
+    input.hidden = true;
+
+    edit.addEventListener('click', () => {
+        if (!coverUploadBusy) input.click();
+    });
+
+    input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        // Defer so we leave Safari's change handler before touching the DOM / FormData.
+        queueMicrotask(() => {
+            handleCoverUpload(file);
+        });
+    });
+
+    wrap.appendChild(edit);
+    wrap.appendChild(input);
+    return wrap;
+}
+
+async function handleCoverUpload(file) {
+    if (!manageListens || !currentAlbum?.id || coverUploadBusy) return;
+
+    coverUploadBusy = true;
+    renderAlbum(currentAlbum);
+
+    try {
+        const result = await uploadAlbumCover(currentAlbum.id, file);
+        if (!result?.album) {
+            throw new Error('Réponse invalide');
+        }
+        currentAlbum = normalizeSeed({ ...currentAlbum, ...result.album }, { remote: false });
+        upsertAlbum(result.album);
+        document.dispatchEvent(new CustomEvent('itrack:albums-changed'));
+        toastSuccess('Pochette mise à jour');
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        // Safari DOMException noise — never surface the raw English pattern error.
+        if (/did not match the expected pattern/i.test(message)) {
+            toastError('Impossible de mettre à jour la pochette');
+        } else {
+            toastError(message || 'Impossible de mettre à jour la pochette');
+        }
+    } finally {
+        coverUploadBusy = false;
+        if (!overlay?.hidden && currentAlbum) {
+            renderAlbum(currentAlbum);
+        }
+    }
 }
 
 function renderAlbum(album, { loading = false } = {}) {
@@ -477,6 +567,7 @@ export function closeAlbumModal() {
     manageListens = false;
     unlistenStep = 0;
     unlistenBusy = false;
+    coverUploadBusy = false;
     currentAlbum = null;
 
     if (lastFocus && typeof lastFocus.focus === 'function') {
@@ -495,6 +586,7 @@ export async function openAlbumModal(seed, { remote = false, showActions = true 
     manageListens = !showActions;
     unlistenStep = 0;
     unlistenBusy = false;
+    coverUploadBusy = false;
     if (actionsEl) {
         actionsEl.hidden = !showActions;
     }

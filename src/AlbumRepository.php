@@ -175,6 +175,15 @@ final class AlbumRepository
         ]);
     }
 
+    public function updateCover(int $id, ?string $cover): void
+    {
+        $stmt = $this->pdo->prepare('UPDATE albums SET cover = :cover WHERE id = :id');
+        $stmt->execute([
+            ':id' => $id,
+            ':cover' => $cover,
+        ]);
+    }
+
     /**
      * Remove from listens. Deletes the row if it has no physical formats,
      * otherwise only clears last_listened_at.
@@ -292,13 +301,6 @@ final class AlbumRepository
         }
         $row['secondary_types'] = $secondary;
 
-        if (
-            (!isset($row['mb_rating']) || $row['mb_rating'] === null)
-            && isset($row['rating']) && is_array($row['rating'])
-        ) {
-            // no-op: rating only exists on API payloads
-        }
-
         if (isset($row['mb_rating']) && $row['mb_rating'] !== null) {
             $row['rating'] = [
                 'value' => (float) $row['mb_rating'],
@@ -310,6 +312,14 @@ final class AlbumRepository
             && isset($row['overview']) && is_string($row['overview']) && $row['overview'] !== ''
         ) {
             $row['description'] = $row['overview'];
+        }
+
+        $row['cover_v'] = null;
+        if (isset($row['cover']) && is_string($row['cover']) && $row['cover'] !== '') {
+            $coverPath = dirname(__DIR__) . '/assets/images/covers/' . basename($row['cover']);
+            if (is_file($coverPath)) {
+                $row['cover_v'] = (int) filemtime($coverPath);
+            }
         }
 
         return $row;

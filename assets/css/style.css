@@ -682,13 +682,27 @@ ul {
     align-items: start;
 }
 
+.album-modal__cover-wrap {
+    position: relative;
+    width: 100%;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
 .album-modal__cover {
+    display: block;
     width: 100%;
     aspect-ratio: 1;
     object-fit: cover;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 14px;
+    transition: filter 0.15s ease;
+}
+
+.album-modal__cover-wrap .album-modal__cover {
+    border-radius: 0;
+    border: 0;
 }
 
 .album-modal__cover--empty {
@@ -704,6 +718,52 @@ ul {
     width: 42%;
     height: auto;
     opacity: 0.55;
+}
+
+.album-modal__cover-edit {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 14px;
+    background: rgba(26, 27, 31, 0.45);
+    color: #fff;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.album-modal__cover-wrap:hover .album-modal__cover-edit,
+.album-modal__cover-wrap:focus-within .album-modal__cover-edit {
+    opacity: 1;
+}
+
+.album-modal__cover-wrap:hover .album-modal__cover,
+.album-modal__cover-wrap:focus-within .album-modal__cover {
+    filter: brightness(0.72);
+}
+
+.album-modal__cover-edit svg {
+    display: block;
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.album-modal__cover-wrap.is-busy .album-modal__cover-edit {
+    opacity: 1;
+    cursor: wait;
+}
+
+.album-modal__cover-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
 }
 
 .album-modal__info {

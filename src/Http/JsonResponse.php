@@ -22,7 +22,16 @@ final class JsonResponse
         }
 
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($data, JSON_UNESCAPED_UNICODE);
+        $json = json_encode(
+            $data,
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        if ($json === false) {
+            http_response_code(500);
+            echo '{"error":"Erreur d\'encodage JSON"}';
+            exit;
+        }
+        echo $json;
         exit;
     }
 

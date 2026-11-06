@@ -101,6 +101,34 @@ export async function unlistenAlbum(id) {
     return response.json();
 }
 
+function coverUploadFilename(file) {
+    const raw = typeof file?.name === 'string' ? file.name : '';
+    const ext = (raw.split('.').pop() || '').toLowerCase();
+    const safeExt = /^[a-z0-9]{1,5}$/.test(ext) ? ext : 'jpg';
+    return `cover.${safeExt}`;
+}
+
+export async function uploadAlbumCover(id, file) {
+    const body = new FormData();
+    body.set('id', String(id));
+    // Safari throws "string did not match the expected pattern" on non-ASCII file names.
+    body.append('cover', file, coverUploadFilename(file));
+
+    const response = await fetch(`${API_URL}?album_cover=1`, {
+        method: 'POST',
+        body,
+    });
+    if (!response.ok) {
+        throw new Error(await readApiError(response, 'Impossible de mettre à jour la pochette'));
+    }
+
+    try {
+        return await response.json();
+    } catch {
+        throw new Error('Réponse serveur invalide');
+    }
+}
+
 export async function deleteAlbum(id) {
     const response = await fetch(API_URL, {
         method: 'DELETE',
